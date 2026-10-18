@@ -1,0 +1,176 @@
+{
+  "directed": true,
+  "multigraph": false,
+  "graph": {
+    "name": "Graph of src/workspaceFileTree.js",
+    "version": "2.0"
+  },
+  "nodes": [
+    {
+      "id": "func:deleteItemToRecycleBin@src/workspaceFileTree.js:L7",
+      "label": "deleteItemToRecycleBin",
+      "category": "FUNCTION_DEF",
+      "scope": {
+        "scope_id": "scope:global",
+        "inner_scope": "scope:deleteItemToRecycleBin@src/workspaceFileTree.js:L7",
+        "depth": 0,
+        "file": "src/workspaceFileTree.js",
+        "line": 7
+      },
+      "props": {
+        "is_async": true,
+        "inner_scope": "scope:deleteItemToRecycleBin@src/workspaceFileTree.js:L7"
+      }
+    },
+    {
+      "id": "func:executeDeleteRPC@src/workspaceFileTree.js:L13",
+      "label": "executeDeleteRPC",
+      "category": "FUNCTION_DEF",
+      "scope": {
+        "scope_id": "scope:global",
+        "inner_scope": "scope:executeDeleteRPC@src/workspaceFileTree.js:L13",
+        "depth": 0,
+        "file": "src/workspaceFileTree.js",
+        "line": 13
+      },
+      "props": {
+        "is_async": true,
+        "inner_scope": "scope:executeDeleteRPC@src/workspaceFileTree.js:L13"
+      }
+    },
+    {
+      "id": "func:notifyUserToast@src/workspaceFileTree.js:L17",
+      "label": "notifyUserToast",
+      "category": "FUNCTION_DEF",
+      "scope": {
+        "scope_id": "scope:global",
+        "inner_scope": "scope:notifyUserToast@src/workspaceFileTree.js:L17",
+        "depth": 0,
+        "file": "src/workspaceFileTree.js",
+        "line": 17
+      },
+      "props": {
+        "is_async": true,
+        "inner_scope": "scope:notifyUserToast@src/workspaceFileTree.js:L17"
+      }
+    },
+    {
+      "id": "func:init@src/workspaceFileTree.js:L30",
+      "label": "init",
+      "category": "FUNCTION_DEF",
+      "scope": {
+        "scope_id": "scope:global",
+        "inner_scope": "scope:init@src/workspaceFileTree.js:L30",
+        "depth": 0,
+        "file": "src/workspaceFileTree.js",
+        "line": 30
+      },
+      "props": {
+        "is_async": false,
+        "inner_scope": "scope:init@src/workspaceFileTree.js:L30"
+      }
+    },
+    {
+      "id": "ctrl:btnDelete@src/workspaceFileTree.js:L22",
+      "label": "#btnDelete",
+      "category": "UI_CONTROL",
+      "scope": {
+        "scope_id": "scope:global",
+        "file": "src/workspaceFileTree.js",
+        "line": 22
+      },
+      "props": {
+        "ui_type": "Button"
+      }
+    },
+    {
+      "id": "event:btnDelete.on('click')@src/workspaceFileTree.js:L27",
+      "label": "on('click')",
+      "category": "EVENT_BINDING",
+      "scope": {
+        "scope_id": "scope:global",
+        "file": "src/workspaceFileTree.js",
+        "line": 27
+      },
+      "props": {
+        "event_name": "click"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "edge_type": "CALLS",
+      "flow_type": "AWAIT",
+      "status": "VALID",
+      "sequence_order": 1,
+      "detail": "作用域可達 (定義於 scope:global)",
+      "source": "func:deleteItemToRecycleBin@src/workspaceFileTree.js:L7",
+      "target": "func:executeDeleteRPC@src/workspaceFileTree.js:L13"
+    },
+    {
+      "edge_type": "CALLS",
+      "flow_type": "AWAIT",
+      "status": "VALID",
+      "sequence_order": 1,
+      "detail": "作用域可達 (定義於 scope:global)",
+      "source": "func:deleteItemToRecycleBin@src/workspaceFileTree.js:L7",
+      "target": "func:notifyUserToast@src/workspaceFileTree.js:L17"
+    },
+    {
+      "edge_type": "WIRES_TO",
+      "flow_type": "SYNC",
+      "status": "VALID",
+      "sequence_order": 1,
+      "detail": "綁定 click 事件",
+      "source": "ctrl:btnDelete@src/workspaceFileTree.js:L22",
+      "target": "event:btnDelete.on('click')@src/workspaceFileTree.js:L27"
+    },
+    {
+      "edge_type": "TRIGGERS",
+      "flow_type": "SYNC",
+      "status": "VALID",
+      "sequence_order": 1,
+      "detail": "作用域可達 (定義於 scope:global)",
+      "source": "event:btnDelete.on('click')@src/workspaceFileTree.js:L27",
+      "target": "func:deleteItemToRecycleBin@src/workspaceFileTree.js:L7"
+    }
+  ],
+  "links": [
+    {
+      "edge_type": "CALLS",
+      "flow_type": "AWAIT",
+      "status": "VALID",
+      "sequence_order": 1,
+      "detail": "作用域可達 (定義於 scope:global)",
+      "source": "func:deleteItemToRecycleBin@src/workspaceFileTree.js:L7",
+      "target": "func:executeDeleteRPC@src/workspaceFileTree.js:L13"
+    },
+    {
+      "edge_type": "CALLS",
+      "flow_type": "AWAIT",
+      "status": "VALID",
+      "sequence_order": 1,
+      "detail": "作用域可達 (定義於 scope:global)",
+      "source": "func:deleteItemToRecycleBin@src/workspaceFileTree.js:L7",
+      "target": "func:notifyUserToast@src/workspaceFileTree.js:L17"
+    },
+    {
+      "edge_type": "WIRES_TO",
+      "flow_type": "SYNC",
+      "status": "VALID",
+      "sequence_order": 1,
+      "detail": "綁定 click 事件",
+      "source": "ctrl:btnDelete@src/workspaceFileTree.js:L22",
+      "target": "event:btnDelete.on('click')@src/workspaceFileTree.js:L27"
+    },
+    {
+      "edge_type": "TRIGGERS",
+      "flow_type": "SYNC",
+      "status": "VALID",
+      "sequence_order": 1,
+      "detail": "作用域可達 (定義於 scope:global)",
+      "source": "event:btnDelete.on('click')@src/workspaceFileTree.js:L27",
+      "target": "func:deleteItemToRecycleBin@src/workspaceFileTree.js:L7"
+    }
+  ]
+}

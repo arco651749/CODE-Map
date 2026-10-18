@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>UIA Semantic Diff Dashboard</title>
+    <style>
+        :root {
+            --bg: #1e1e2e;
+            --card: #252538;
+            --border: #3b3b54;
+            --text: #cdd6f4;
+            --green: #a6e3a1;
+            --blue: #89b4fa;
+            --yellow: #f9e2af;
+            --red: #f38ba8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 24px;
+            line-height: 1.5;
+        }
+        .header { margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        .header h1 { font-size: 20px; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .badge { font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }
+        .badge-range { background: #313244; color: var(--blue); border: 1px solid var(--border); }
+        .badge-wire { background: rgba(166, 227, 161, 0.2); color: var(--green); }
+        .badge-key { background: rgba(249, 226, 175, 0.2); color: var(--yellow); }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+        @media(max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+        
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .card-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: #fff; display: flex; justify-content: space-between; }
+        
+        .node-container { display: flex; flex-direction: column; gap: 8px; }
+        .node-pill {
+            background: #181825;
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--green);
+            padding: 8px 12px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+        }
+        .node-tag { font-family: monospace; font-weight: bold; color: var(--green); }
+        .node-name { font-family: monospace; color: #bac2de; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+        th { color: #a6adc8; font-size: 11px; text-transform: uppercase; }
+        .status-ok { color: var(--green); font-weight: 600; }
+        
+        .verdict-box {
+            background: rgba(166, 227, 161, 0.1);
+            border: 1px solid var(--green);
+            border-radius: 8px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--green);
+            font-weight: 600;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <span>🌲 UIA 語意樹代碼差分儀表板</span>
+            <span class="badge badge-range">Range: df3cc5f a1995e4</span>
+        </h1>
+        <p style="color:#a6adc8; font-size:13px; margin-top:4px;">
+            Target Repository: <code>D:\Users\arco0\.gemini\config\plugins\workspace-file-tree</code>
+        </p>
+    </div>
+
+    <div class="grid">
+        <!-- Controls Subtree -->
+        <div class="card">
+            <div class="card-title">
+                <span>➕ 新增 UIA 控制項節點 (Controls Subtree)</span>
+                <span style="color:var(--green); font-size:12px;">4 Nodes</span>
+            </div>
+            <div class="node-container">
+                
+            <div class="node-pill node-added">
+                <span class="node-tag">[+] Modal/Pane</span>
+                <span class="node-name">#delete-confirm-modal</span>
+            </div>
+            
+            <div class="node-pill node-added">
+                <span class="node-tag">[+] Element</span>
+                <span class="node-name">#delete-confirm-target</span>
+            </div>
+            
+            <div class="node-pill node-added">
+                <span class="node-tag">[+] Button</span>
+                <span class="node-name">#btn-delete-cancel</span>
+            </div>
+            
+            <div class="node-pill node-added">
+                <span class="node-tag">[+] Button</span>
+                <span class="node-name">#btn-delete-confirm</span>
+            </div>
+            
+            </div>
+        </div>
+
+        <!-- Invariants & Lifecycle -->
+        <div class="card">
+            <div class="card-title">
+                <span>🛡️ 鍵盤快速鍵與生命週期守衛</span>
+            </div>
+            <div style="font-size:13px; margin-bottom:12px;">
+                <span style="color:#a6adc8;">捕獲快速鍵：</span> <span class='badge badge-key'>Enter</span> <span class='badge badge-key'>Escape</span>
+            </div>
+            <div style="font-size:13px;">
+                <span style="color:#a6adc8; display:block; margin-bottom:6px;">銷毀守衛 (Anti-Memory Leak)：</span>
+                <ul style="padding-left:18px; color:var(--green); font-size:12px;">
+                    <li>🛡️ removeEventListener (清理事件監聽器)</li><li>🛡️ cleanup() (定義清理函式)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wiring Table -->
+    <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">
+            <span>⚡ 電線通電檢查 (Event Wiring Check)</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>標籤</th>
+                    <th>觸發對象 (Target)</th>
+                    <th>事件類型 (Event)</th>
+                    <th>銜接函式 (Handler)</th>
+                    <th>通電狀態</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+            <tr>
+                <td><span class="badge badge-wire">⚡ WIRED</span></td>
+                <td><code>btnConfirm?</code></td>
+                <td><code>on('click')</code></td>
+                <td><code>onConfirm</code></td>
+                <td><span class="status-ok">🟢 已通電</span></td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-wire">⚡ WIRED</span></td>
+                <td><code>btnCancel?</code></td>
+                <td><code>on('click')</code></td>
+                <td><code>onCancel</code></td>
+                <td><span class="status-ok">🟢 已通電</span></td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-wire">⚡ WIRED</span></td>
+                <td><code>modal</code></td>
+                <td><code>on('click')</code></td>
+                <td><code>onOverlayClick</code></td>
+                <td><span class="status-ok">🟢 已通電</span></td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge badge-wire">⚡ WIRED</span></td>
+                <td><code>window</code></td>
+                <td><code>on('keydown')</code></td>
+                <td><code>onKeyDown</code></td>
+                <td><span class="status-ok">🟢 已通電</span></td>
+            </tr>
+            
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Quality Gate Verdict -->
+    <div class="verdict-box">
+        <span style="font-size:20px;">🟢</span>
+        <span>【UIA 品質閘道判定】：驗收通過 (READY TO SHIP) —— 控制項樹結構完整、電線通電驗證無誤、且具備事件監聽清理守衛！</span>
+    </div>
+</body>
+</html>

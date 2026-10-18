@@ -1,0 +1,37 @@
+{
+  "workspace": "D:/AntiGravity/UIA_Coder",
+  "generatedAt": "2026-10-18T12:14:59.696552+00:00",
+  "notebooks": [
+    {
+      "file": ".marimo/shared_toolbox.py",
+      "modules": [
+        "# 📦 專案共用工具箱 (Shared Toolbox)",
+        "## 📌 模組：檔案雜湊與大小快速檢測器 (`inspect_text_digest`)"
+      ],
+      "functions": [
+        {
+          "name": "inspect_text_digest",
+          "signature": "inspect_text_digest(text) -> dict",
+          "docstring": "輸入任意文字或內容，計算 SHA-256 雜湊、UTF-8 byte 大小與行數。",
+          "lineno": 45,
+          "kind": "app.function"
+        }
+      ]
+    },
+    {
+      "file": ".marimo/394096b1-bc18-40c1-8189-21c4f485bf2d/marimo_session.py",
+      "modules": [
+        "# 🛡️ 程式碼形式化審查與 UIA 語意樹差分筆記本"
+      ],
+      "functions": [
+        {
+          "name": "badge_color",
+          "signature": "badge_color(b_type) -> Any",
+          "docstring": "",
+          "lineno": 242,
+          "kind": "cell_function"
+        }
+      ]
+    }
+  ]
+}
