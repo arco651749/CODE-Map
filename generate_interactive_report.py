@@ -42,7 +42,6 @@ def generate_report():
     for n, d in graph.g.nodes(data=True):
         if d.get("category") == "UI_CONTROL":
             label = d.get("label", "")
-            # 避開內部暫存中間變數，優先展示真實 UI 控制項
             out_edges = list(graph.g.out_edges(n, data=True))
             if not out_edges and label in seen_ctrls:
                 continue
@@ -84,11 +83,13 @@ def generate_report():
                 return node_obj
 
             tree_data = build_tree_node(n)
-            # 只有有事件綁定或有子節點的才納入主要視圖
             if tree_data["children"]:
-                # 計算該錨點的因果 Bundle 函式清單
                 descendants = nx.descendants(graph.g, n)
                 bundle_funcs = [funcs_meta[did] for did in descendants if did in funcs_meta]
+                
+                # 產出該控制項的整包因果 Markdown 代碼包
+                bundle_text = graph.to_causal_code_bundle(n)
+
                 ui_trees.append({
                     "anchor_id": n,
                     "label": label,
@@ -96,14 +97,18 @@ def generate_report():
                     "line": ctrl_scope.get("line", 1),
                     "tree": tree_data,
                     "bundle_count": len(bundle_funcs),
-                    "bundle_funcs": [f["id"] for f in bundle_funcs]
+                    "bundle_funcs": [f["id"] for f in bundle_funcs],
+                    "bundle_text": bundle_text
                 })
 
     html_content = f"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>CODE-Map 互動式全景語意因果地圖 (workspace-file-tree)</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>CODE-Map 互動式全景語意因果地圖 (workspace-file-tree v2)</title>
   <style>
     :root {{
       --bg: #1e1e2e;
@@ -119,25 +124,27 @@ def generate_report():
       --danger: #f38ba8;
       --code-bg: #11111b;
       --drawer-bg: #1e1e2e;
+      --btn-bg: #313244;
+      --btn-hover: #45475a;
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-      padding: 20px;
+      padding: 16px;
       line-height: 1.5;
     }}
     .header {{
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-bottom: 16px;
+      padding-bottom: 12px;
       border-bottom: 1px solid var(--border);
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }}
     .header h1 {{
-      font-size: 20px;
+      font-size: 19px;
       color: var(--primary);
       display: flex;
       align-items: center;
@@ -154,38 +161,38 @@ def generate_report():
     }}
     .stats-bar {{
       display: flex;
-      gap: 16px;
-      margin-bottom: 20px;
+      gap: 12px;
+      margin-bottom: 16px;
     }}
     .stat-card {{
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 12px 18px;
+      padding: 10px 16px;
       flex: 1;
     }}
     .stat-val {{
-      font-size: 22px;
+      font-size: 20px;
       font-weight: bold;
       color: var(--primary);
     }}
     .stat-label {{
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-dim);
     }}
     .filter-bar {{
       display: flex;
       gap: 10px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }}
     .search-input {{
       flex: 1;
       background: var(--card-bg);
       border: 1px solid var(--border);
       color: var(--text);
-      padding: 9px 14px;
+      padding: 8px 14px;
       border-radius: 6px;
-      font-size: 14px;
+      font-size: 13px;
       outline: none;
     }}
     .search-input:focus {{
@@ -193,48 +200,49 @@ def generate_report():
     }}
     .layout {{
       display: flex;
-      gap: 20px;
+      gap: 16px;
       align-items: flex-start;
     }}
     .tree-col {{
-      flex: 1;
+      flex: 1.1;
       background: var(--tree-bg);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 16px 20px;
-      font-family: "JetBrains Mono", Consolas, "Fira Code", monospace;
-      font-size: 13px;
+      padding: 14px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12.5px;
       overflow-x: auto;
-      max-height: 800px;
+      max-height: 720px;
       overflow-y: auto;
     }}
     .code-col {{
-      width: 480px;
+      flex: 0.9;
       background: var(--drawer-bg);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 16px;
       position: sticky;
-      top: 20px;
+      top: 16px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      max-height: 800px;
+      gap: 10px;
+      max-height: 720px;
     }}
     .node-row {{
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 4px 6px;
-      border-radius: 4px;
+      gap: 6px;
+      padding: 5px 8px;
+      border-radius: 5px;
       cursor: pointer;
       user-select: none;
+      transition: background 0.1s;
     }}
     .node-row:hover {{
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.06);
     }}
     .node-row.active {{
-      background: rgba(137, 180, 250, 0.15);
+      background: rgba(137, 180, 250, 0.2) !important;
       border-left: 3px solid var(--primary);
     }}
     .tag-ctrl {{
@@ -244,9 +252,10 @@ def generate_report():
     .tag-btn {{
       color: #89b4fa;
       font-weight: 700;
-      background: rgba(137, 180, 250, 0.12);
-      padding: 1px 6px;
+      background: rgba(137, 180, 250, 0.15);
+      padding: 1px 7px;
       border-radius: 4px;
+      border: 1px solid rgba(137, 180, 250, 0.3);
     }}
     .tag-event {{
       color: #f9e2af;
@@ -254,69 +263,117 @@ def generate_report():
     }}
     .tag-func {{
       color: #a6e3a1;
-      font-weight: 500;
+      font-weight: 600;
     }}
     .tag-await {{
       color: #fab387;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: bold;
+      background: rgba(250, 179, 135, 0.15);
+      padding: 0 4px;
+      border-radius: 3px;
     }}
     .tag-type {{
       font-size: 11px;
       color: var(--text-dim);
       background: var(--card-bg);
-      padding: 1px 6px;
-      border-radius: 4px;
+      padding: 1px 5px;
+      border-radius: 3px;
       border: 1px solid var(--border);
     }}
-    .btn-inspect {{
+    
+    /* 核心操作按鈕 */
+    .btn-action-code {{
       margin-left: auto;
-      background: rgba(137, 180, 250, 0.15);
-      color: var(--primary);
-      border: 1px solid rgba(137, 180, 250, 0.3);
+      background: #89b4fa;
+      color: #11111b;
+      border: none;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      transition: all 0.15s;
+    }}
+    .btn-action-code:hover {{
+      background: #b4befe;
+      transform: translateY(-1px);
+    }}
+    .btn-bundle-code {{
+      margin-left: 6px;
+      background: rgba(245, 194, 231, 0.2);
+      color: var(--accent);
+      border: 1px solid var(--accent);
       padding: 2px 7px;
       border-radius: 4px;
       font-size: 11px;
+      font-weight: 600;
       cursor: pointer;
     }}
-    .btn-inspect:hover {{
-      background: var(--primary);
+    .btn-bundle-code:hover {{
+      background: var(--accent);
       color: #11111b;
     }}
+
     .sub-tree {{
-      margin-left: 20px;
+      margin-left: 18px;
       border-left: 1px dashed var(--border);
-      padding-left: 10px;
+      padding-left: 8px;
     }}
     .arrow {{
       color: var(--text-dim);
-      font-size: 11px;
+      font-size: 10px;
       display: inline-block;
-      width: 14px;
+      width: 12px;
       transition: transform 0.15s;
     }}
     .collapsed > .sub-tree {{ display: none; }}
     .collapsed > .node-row .arrow {{ transform: rotate(-90deg); }}
     
-    /* Code Viewer */
+    /* Code Viewer Panel */
     .code-title {{
-      font-size: 15px;
+      font-size: 14px;
       font-weight: bold;
       color: var(--primary);
       display: flex;
       justify-content: space-between;
       align-items: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }}
+    .tabs {{
+      display: flex;
+      gap: 8px;
+    }}
+    .tab-btn {{
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }}
+    .tab-btn.active {{
+      background: var(--primary);
+      color: #11111b;
+      font-weight: bold;
+      border-color: var(--primary);
     }}
     .code-meta {{
       font-size: 12px;
-      color: var(--text-dim);
+      color: var(--text);
       background: var(--card-bg);
       padding: 8px 12px;
       border-radius: 6px;
       border: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
     }}
     .code-box {{
       background: var(--code-bg);
@@ -329,20 +386,15 @@ def generate_report():
       overflow-y: auto;
       max-height: 480px;
       white-space: pre;
-    }}
-    .empty-state {{
-      color: var(--text-dim);
-      text-align: center;
-      padding: 60px 20px;
-      font-size: 13px;
+      line-height: 1.45;
     }}
     .copy-btn {{
       background: var(--card-bg);
       border: 1px solid var(--border);
       color: var(--text);
-      padding: 4px 10px;
+      padding: 3px 9px;
       border-radius: 4px;
-      font-size: 12px;
+      font-size: 11px;
       cursor: pointer;
     }}
     .copy-btn:hover {{
@@ -361,7 +413,7 @@ def generate_report():
   <div class="stats-bar">
     <div class="stat-card">
       <div class="stat-val">{len(ui_trees)}</div>
-      <div class="stat-label">UI 錨點控制項 (Anchors)</div>
+      <div class="stat-label">UI 控制項錨點 (Anchors)</div>
     </div>
     <div class="stat-card">
       <div class="stat-val">{len(funcs_meta)}</div>
@@ -369,11 +421,11 @@ def generate_report():
     </div>
     <div class="stat-card">
       <div class="stat-val">0</div>
-      <div class="stat-label">閉包作用域阻隔 (Scope Errors)</div>
+      <div class="stat-label">閉包死穴 (Scope Errors)</div>
     </div>
     <div class="stat-card">
       <div class="stat-val">0</div>
-      <div class="stat-label">主執行緒阻塞 (UI Blocking)</div>
+      <div class="stat-label">主執行緒阻塞危害 (UI Blocking)</div>
     </div>
   </div>
 
@@ -388,11 +440,11 @@ def generate_report():
 
     <div class="code-col" id="codePanel">
       <div class="code-title">
-        <span>💻 程式碼切片檢視器</span>
-        <button class="copy-btn" id="copyCodeBtn" style="display:none;" onclick="copyCode()">複製代碼</button>
+        <span id="panelTitle">💻 程式碼切片檢視器</span>
+        <button class="copy-btn" id="copyCodeBtn" onclick="copyCode()">複製代碼 📋</button>
       </div>
-      <div id="inspectorContent" class="empty-state">
-        👈 點擊左側任何函式節點或「代碼」按鈕，<br>即可即時預覽儲存於 NetworkX 的真實原始碼實作。
+      <div id="inspectorContent">
+        <!-- 預設由 JavaScript 載入 #btnDelete 之原始碼 -->
       </div>
     </div>
   </div>
@@ -407,16 +459,15 @@ def generate_report():
       const root = document.getElementById('treeRoot');
       root.innerHTML = '';
 
-      uiData.forEach(item => {{
+      uiData.forEach((item, idx) => {{
         const itemEl = document.createElement('div');
         itemEl.className = 'tree-item';
         itemEl.dataset.label = item.label.toLowerCase();
+        itemEl.id = 'anchor-' + idx;
 
         const row = document.createElement('div');
         row.className = 'node-row';
-        row.onclick = (e) => {{
-          if (e.target.tagName !== 'BUTTON') toggleCollapse(itemEl);
-        }};
+        row.id = 'row-anchor-' + idx;
 
         const arrow = document.createElement('span');
         arrow.className = 'arrow';
@@ -433,12 +484,26 @@ def generate_report():
         typeTag.textContent = item.ui_type + ' @ L' + item.line;
         row.appendChild(typeTag);
 
+        // 頂層按鈕專屬：整包因果代碼 (Bundle) 按鈕
         if (item.bundle_count > 0) {{
-          const bundleBadge = document.createElement('span');
-          bundleBadge.style.cssText = 'font-size: 11px; color: var(--accent); background: rgba(245,194,231,0.12); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(245,194,231,0.3);';
-          bundleBadge.textContent = '📦 關聯 ' + item.bundle_count + ' 個函式';
-          row.appendChild(bundleBadge);
+          const bundleBtn = document.createElement('button');
+          bundleBtn.className = 'btn-bundle-code';
+          bundleBtn.textContent = '📦 關聯 ' + item.bundle_count + ' 函式代碼包';
+          bundleBtn.title = '查看按鈕點擊後觸發的所有函式原始碼集合';
+          bundleBtn.onclick = (e) => {{
+            e.stopPropagation();
+            showBundle(item, row);
+          }};
+          row.appendChild(bundleBtn);
         }}
+
+        // 點擊頂層行即切換折疊或查看
+        row.onclick = (e) => {{
+          if (e.target.tagName !== 'BUTTON') {{
+            toggleCollapse(itemEl);
+            if (item.bundle_count > 0) showBundle(item, row);
+          }}
+        }};
 
         itemEl.appendChild(row);
 
@@ -486,15 +551,23 @@ def generate_report():
         }} else if (c.category === 'FUNCTION_DEF') {{
           nameTag.className = 'tag-func';
           nameTag.textContent = '🔒 ' + c.label + '()';
+          // 函式節點點擊整行直接看代碼
+          row.onclick = (e) => {{
+            if (e.target.tagName !== 'BUTTON') {{
+              inspectFunction(c.id, row);
+              if (c.children && c.children.length > 0) toggleCollapse(wrap);
+            }}
+          }};
         }} else {{
           nameTag.textContent = c.label;
         }}
         row.appendChild(nameTag);
 
+        // 如果是函式節點且具備代碼，強制渲染搶眼的代碼按鈕
         if (c.has_code) {{
           const inspectBtn = document.createElement('button');
-          inspectBtn.className = 'btn-inspect';
-          inspectBtn.textContent = '代碼 💻';
+          inspectBtn.className = 'btn-action-code';
+          inspectBtn.innerHTML = '💻 查看原始碼';
           inspectBtn.onclick = (e) => {{
             e.stopPropagation();
             inspectFunction(c.id, row);
@@ -527,17 +600,36 @@ def generate_report():
       if (!meta) return;
 
       currentSourceCode = meta.source_code;
+      document.getElementById('panelTitle').textContent = '💻 函式實作: ' + meta.label + '()';
       document.getElementById('copyCodeBtn').style.display = 'block';
 
       const panel = document.getElementById('inspectorContent');
       panel.innerHTML = `
         <div class="code-meta">
-          <div><strong>簽章:</strong> <span style="color:var(--primary)">${{escapeHtml(meta.signature)}}</span></div>
-          <div><strong>範圍:</strong> L${{meta.line_start}} ~ L${{meta.line_end}} (共 ${{meta.line_count}} 行)</div>
-          <div><strong>非同步:</strong> ${{meta.is_async ? '⚡ async function' : '一般同步函式'}}</div>
-          <div><strong>參數:</strong> ${{escapeHtml(meta.parameters)}}</div>
+          <div><strong>函式簽章:</strong> <span style="color:var(--primary)">${{escapeHtml(meta.signature)}}</span></div>
+          <div><strong>精確範圍:</strong> L${{meta.line_start}} ~ L${{meta.line_end}} (共 ${{meta.line_count}} 行)</div>
+          <div><strong>執行型別:</strong> ${{meta.is_async ? '⚡ async function (非同步 Promise)' : '同步一般函式'}}</div>
+          <div><strong>參數宣告:</strong> ${{escapeHtml(meta.parameters)}}</div>
         </div>
         <div class="code-box">${{escapeHtml(meta.source_code)}}</div>
+      `;
+    }}
+
+    function showBundle(item, rowEl) {{
+      document.querySelectorAll('.node-row').forEach(r => r.classList.remove('active'));
+      if (rowEl) rowEl.classList.add('active');
+
+      currentSourceCode = item.bundle_text;
+      document.getElementById('panelTitle').textContent = '📦 ' + item.label + ' 因果代碼包 (共 ' + item.bundle_count + ' 函式)';
+      document.getElementById('copyCodeBtn').style.display = 'block';
+
+      const panel = document.getElementById('inspectorContent');
+      panel.innerHTML = `
+        <div class="code-meta">
+          <div><strong>UI 錨點:</strong> <span style="color:var(--primary)">${{escapeHtml(item.label)}} (${{item.ui_type}})</span></div>
+          <div><strong>觸發下游:</strong> 共 ${{item.bundle_count}} 個關聯函式實作已由 NetworkX 打包</div>
+        </div>
+        <div class="code-box">${{escapeHtml(item.bundle_text)}}</div>
       `;
     }}
 
@@ -567,17 +659,28 @@ def generate_report():
       }});
     }}
 
+    // 初始化渲染
     renderTree();
+
+    // 🌟 預設自動打開並高亮 #btnDelete 的代碼包，保證一進來就看到程式碼！
+    const deleteAnchor = uiData.find(d => d.label === '#btnDelete');
+    if (deleteAnchor) {{
+      const delIdx = uiData.indexOf(deleteAnchor);
+      const row = document.getElementById('row-anchor-' + delIdx);
+      showBundle(deleteAnchor, row);
+    }} else if (uiData.length > 0) {{
+      showBundle(uiData[0], document.getElementById('row-anchor-0'));
+    }}
   </script>
 </body>
 </html>
 """
 
-    report_path = r"d:\AntiGravity\UIA_Coder\reports\workspace_file_tree_codemap.html"
-    with open(report_path, "w", encoding="utf-8") as f:
+    report_path_v2 = r"d:\AntiGravity\UIA_Coder\reports\workspace_file_tree_codemap_v2.html"
+    with open(report_path_v2, "w", encoding="utf-8") as f:
         f.write(html_content)
 
-    print(f"✅ 互動式 CODE-Map 儀表板已成功生成: {report_path}")
+    print(f"✅ 互動式 CODE-Map 儀表板 v2 已成功生成: {report_path_v2}")
 
 if __name__ == "__main__":
     generate_report()
