@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>CODE-Map 全景語意因果地圖 - agent_toolbox.py</title>
+  <style>
+    :root {
+      --bg: #1e1e2e;
+      --card-bg: #252538;
+      --tree-bg: #181825;
+      --border: #313244;
+      --text: #cdd6f4;
+      --text-dim: #a6adc8;
+      --primary: #89b4fa;
+      --accent: #f5c2e7;
+      --success: #a6e3a1;
+      --warning: #f9e2af;
+      --danger: #f38ba8;
+      --code-bg: #11111b;
+      --drawer-bg: #1e1e2e;
+      --btn-bg: #313244;
+      --btn-hover: #45475a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      padding: 16px;
+      line-height: 1.5;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .header h1 {
+      font-size: 19px;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header h1 span {
+      font-size: 13px;
+      color: var(--text-dim);
+      font-weight: normal;
+    }
+    .badge-pass {
+      background: rgba(166, 227, 161, 0.15);
+      color: var(--success);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--success);
+    }
+    .badge-danger {
+      background: rgba(243, 139, 168, 0.15);
+      color: var(--danger);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--danger);
+    }
+    .stats-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      flex: 1;
+    }
+    .stat-val {
+      font-size: 20px;
+      font-weight: bold;
+      color: var(--primary);
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .search-input {
+      flex: 1;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: var(--primary);
+    }
+    .layout {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .tree-col {
+      flex: 1.1;
+      background: var(--tree-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12.5px;
+      overflow-x: auto;
+      max-height: 720px;
+      overflow-y: auto;
+    }
+    .code-col {
+      flex: 0.9;
+      background: var(--drawer-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      position: sticky;
+      top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 720px;
+    }
+    .tree-item {
+      margin-bottom: 4px;
+    }
+    .node-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.1s;
+    }
+    .node-row:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .node-row.active {
+      background: rgba(137, 180, 250, 0.2) !important;
+      border-left: 3px solid var(--primary);
+    }
+    .tag-ctrl {
+      color: #89dceb;
+      font-weight: 700;
+    }
+    .tag-btn {
+      color: #89b4fa;
+      font-weight: 700;
+      background: rgba(137, 180, 250, 0.15);
+      padding: 1px 7px;
+      border-radius: 4px;
+      border: 1px solid rgba(137, 180, 250, 0.3);
+    }
+    .tag-event {
+      color: #f9e2af;
+      font-weight: 600;
+    }
+    .tag-func {
+      color: #a6e3a1;
+      font-weight: 600;
+    }
+    .tag-await {
+      color: #fab387;
+      font-size: 10px;
+      font-weight: bold;
+      background: rgba(250, 179, 135, 0.15);
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+    .tag-blocked {
+      color: #f38ba8;
+      font-size: 10px;
+      font-weight: bold;
+      background: rgba(243, 139, 168, 0.15);
+      padding: 0 4px;
+      border-radius: 3px;
+      border: 1px solid var(--danger);
+    }
+    .tag-type {
+      font-size: 11px;
+      color: var(--text-dim);
+      background: var(--card-bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    
+    /* 核心操作按鈕 */
+    .btn-action-code {
+      margin-left: auto;
+      background: #89b4fa;
+      color: #11111b;
+      border: none;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      transition: all 0.15s;
+    }
+    .btn-action-code:hover {
+      background: #b4befe;
+      transform: translateY(-1px);
+    }
+    .btn-bundle-code {
+      margin-left: 6px;
+      background: rgba(245, 194, 231, 0.2);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-bundle-code:hover {
+      background: var(--accent);
+      color: #11111b;
+    }
+
+    .sub-tree {
+      margin-left: 18px;
+      border-left: 1px dashed var(--border);
+      padding-left: 8px;
+    }
+    .arrow {
+      color: var(--text-dim);
+      font-size: 10px;
+      display: inline-block;
+      width: 12px;
+      transition: transform 0.15s;
+    }
+    .collapsed > .sub-tree { display: none; }
+    .collapsed > .node-row .arrow { transform: rotate(-90deg); }
+    
+    /* Code Viewer Panel */
+    .code-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--primary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .code-meta {
+      font-size: 12px;
+      color: var(--text);
+      background: var(--card-bg);
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .code-box {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12px;
+      color: #cdd6f4;
+      overflow-y: auto;
+      max-height: 520px;
+      white-space: pre;
+      line-height: 1.45;
+    }
+    .copy-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 3px 9px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .copy-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>🌲 CODE-Map 全景語意因果地圖 <span>(agent_toolbox.py)</span></h1>
+    <div class="badge-pass">🟢 READY_TO_SHIP</div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-val">2</div>
+      <div class="stat-label">錨點/入口數量 (Anchors)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">21</div>
+      <div class="stat-label">已截取原始碼函式 (NetworkX Props)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--success);">0</div>
+      <div class="stat-label">作用域阻隔 (Scope Errors)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--success);">0</div>
+      <div class="stat-label">危害調用 (Hazards)</div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" id="searchInput" class="search-input" placeholder="🔍 即時搜尋控制項、按鈕、CLI 或函式名稱..." oninput="filterTree()">
+  </div>
+
+  <div class="layout">
+    <div class="tree-col" id="treeRoot">
+      <!-- 樹狀控制項將透過 JavaScript 動態渲染 -->
+    </div>
+
+    <div class="code-col" id="codePanel">
+      <div class="code-title">
+        <span id="panelTitle">💻 程式碼切片檢視器</span>
+        <button class="copy-btn" id="copyCodeBtn" onclick="copyCode()">複製代碼 📋</button>
+      </div>
+      <div id="inspectorContent">
+        <!-- 預設載入首個錨點之代碼 -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const uiData = [{"anchor_id": "func:clean_text_data@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L45", "label": "clean_text_data", "ui_type": "FUNCTION_DEF", "line": 45, "tree": {"id": "func:clean_text_data@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L45", "label": "clean_text_data", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:splitlines@external", "label": "splitlines (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:sum@external", "label": "sum (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}]}, "bundle_count": 3, "bundle_funcs": ["func:clean_text_data@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L45", "func:splitlines@external", "func:sum@external"], "bundle_text": "# 📦 CODE-Map 因果切片代碼包: func:clean_text_data@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L45\n\n## 🔹 def clean_text_data(raw_text (D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py: L45~L59)\n```\ndef clean_text_data(raw_text: str, remove_blank: bool = True, strip_lines: bool = True) -> dict:\n    \"\"\"核心邏輯：純 Python 函式，可直接被外部 import 或匯出。\"\"\"\n    lines = raw_text.splitlines()\n    cleaned = []\n    for line in lines:\n        target = line.strip() if strip_lines else line\n        if remove_blank and not target:\n            continue\n        cleaned.append(target)\n    return {\n        \"total_lines\": len(cleaned),\n        \"original_lines\": len(lines),\n        \"char_count\": sum(len(line) for line in cleaned),\n        \"preview\": cleaned[:10]\n    }\n```\n"}, {"anchor_id": "func:safe_parse_json@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L108", "label": "safe_parse_json", "ui_type": "FUNCTION_DEF", "line": 108, "tree": {"id": "func:safe_parse_json@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L108", "label": "safe_parse_json", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:loads@external", "label": "loads (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:type@external", "label": "type (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}]}, "bundle_count": 3, "bundle_funcs": ["func:safe_parse_json@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L108", "func:type@external", "func:loads@external"], "bundle_text": "# 📦 CODE-Map 因果切片代碼包: func:safe_parse_json@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L108\n\n## 🔹 def safe_parse_json(raw_input (D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py: L108~L125)\n```\ndef safe_parse_json(raw_input: str) -> dict:\n    \"\"\"純 Python 核心邏輯：支援去除 Markdown 代碼塊標籤並安全解析 JSON\"\"\"\n    import json\n    text = raw_input.strip()\n    # 移除 markdown code block\n    if text.startswith(\"```json\"):\n        text = text[7:]\n    elif text.startswith(\"```\"):\n        text = text[3:]\n    if text.endswith(\"```\"):\n        text = text[:-3]\n    text = text.strip()\n\n    try:\n        parsed = json.loads(text)\n        return {\"valid\": True, \"type\": type(parsed).__name__, \"data\": parsed}\n    except Exception as e:\n        return {\"valid\": False, \"error\": str(e), \"data\": None}\n```\n"}];
+    const funcsData = {"func:_@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L8": {"id": "func:_@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L8", "label": "Cell (L8)", "raw_label": "_", "signature": "def _()", "parameters": "()", "line_start": 8, "line_end": 14, "line_count": 7, "is_async": false, "source_code": "def _():\n    import marimo as mo\n    import sys\n    import json\n    from pathlib import Path\n\n    return (mo,)", "scope_id": "scope:global", "class_name": ""}, "func:_@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L18": {"id": "func:_@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L18", "label": "Cell (L18)", "raw_label": "_", "signature": "def _(mo)", "parameters": "(mo)", "line_start": 18, "line_end": 27, "line_count": 10, "is_async": false, "source_code": "def _(mo):\n    mo.md(r\"\"\"\n    # 🛠️ Antigravity Agent Toolbox\n    > **活文檔代碼庫 (Living Executable Documentation)**\n    >\n    > 本筆記本由 Antigravity AI Agent 與使用者共同維護：\n    > - 每個模組包含 **📝 踩坑紀錄 (Gotchas)**、**⚙️ 純邏輯函式** 與 **🎛️ 互動測試面板**。\n    > - 支援在 Antigravity 側邊欄即時執行、熱重載，並可一鍵匯出為獨立生產程式。\n    \"\"\")\n    return", "scope_id": "scope:global", "class_name": ""}, "func:_@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L31": {"id": "func:_@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L31", "label": "Cell (L31)", "raw_label": "_", "signature": "def _(mo)", "parameters": "(mo)", "line_start": 31, "line_end": 41, "line_count": 11, "is_async": false, "source_code": "def _(mo):\n    mo.md(r\"\"\"\n    ---\n    ## 📌 模組 1：文字編碼清洗與統計器\n    * **最後修訂**：2026-10-15\n    * **踩坑紀錄 (Gotchas)**：\n      1. Windows 預設 `cp950` 會導致中文與 Emoji (🚀 ✨) 輸出時報錯 `UnicodeEncodeError`，因此所有字串處理一律以 UTF-8 規範為基底。\n      2. 去除空白行時，不可僅使用 `replace('\\n\\n', '\\n')`，因為 CRLF (`\\r\\n`) 與包含空白字元（Tab/Space）的空行會漏網。\n    * **修改原因**：作為日常清洗剪貼簿文本、統計字數與過濾空行的基礎模組。\n    \"\"\")\n    return", "scope_id": "scope:global", "class_name": ""}, "func:clean_text_data@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L45": {"id": "func:clean_text_data@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L45", "label": "clean_text_data", "raw_label": "clean_text_data", "signature": "def clean_text_data(raw_text", "parameters": "(raw_text: str, remove_blank: bool = True, strip_lines: bool = True)", "line_start": 45, "line_end": 59, "line_count": 15, "is_async": false, "source_code": "def clean_text_data(raw_text: str, remove_blank: bool = True, strip_lines: bool = True) -> dict:\n    \"\"\"核心邏輯：純 Python 函式，可直接被外部 import 或匯出。\"\"\"\n    lines = raw_text.splitlines()\n    cleaned = []\n    for line in lines:\n        target = line.strip() if strip_lines else line\n        if remove_blank and not target:\n            continue\n        cleaned.append(target)\n    return {\n        \"total_lines\": len(cleaned),\n        \"original_lines\": len(lines),\n        \"char_count\": sum(len(line) for line in cleaned),\n        \"preview\": cleaned[:10]\n    }", "scope_id": "scope:global", "class_name": ""}, "func:_@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L63": {"id": "func:_@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L63", "label": "Cell (L63)", "raw_label": "_", "signature": "def _(mo)", "parameters": "(mo)", "line_start": 63, "line_end": 91, "line_count": 29, "is_async": false, "source_code": "def _(mo):\n    # 互動式操作元件\n    sample_text = (\n        \"Antigravity Marimo Extension\\n\"\n        \"支援雙向即時熱重載與側邊欄操作\\n\"\n        \"\\n\"\n        \"測試行 1：處理特殊字元與 Emoji 🚀 ✨\\n\"\n        \"測試行 2：Windows 環境自動適配\\n\"\n        \"   \\n\"\n        \"結束測試行\"\n    )\n    txt_input = mo.ui.text_area(value=sample_text, label=\"輸入待處理文字\", rows=6)\n    chk_blank = mo.ui.checkbox(value=True, label=\"過濾空白行\")\n    chk_strip = mo.ui.checkbox(value=True, label=\"去除首尾空格\")\n    btn_exec = mo.ui.run_button(label=\"🚀 執行處理\")\n\n    controls = mo.vstack([\n        txt_input,\n        mo.hstack([chk_blank, chk_strip, btn_exec], justify=\"start\", gap=1)\n    ])\n\n    res = clean_text_data(txt_input.value, chk_blank.value, chk_strip.value) if (btn_exec.value or txt_input.value) else None\n\n    mo.vstack([\n        mo.md(\"### 🎛️ 模組 1 自助操作面板\"),\n        controls,\n        mo.ui.json(res) if res else mo.md(\"_請輸入文字並點擊執行_\")\n    ])\n    return", "scope_id": "scope:global", "class_name": ""}, "func:_@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L95": {"id": "func:_@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L95", "label": "Cell (L95)", "raw_label": "_", "signature": "def _(mo)", "parameters": "(mo)", "line_start": 95, "line_end": 104, "line_count": 10, "is_async": false, "source_code": "def _(mo):\n    mo.md(r\"\"\"\n    ---\n    ## 📌 模組 2：JSON 格式診斷與格式化器\n    * **最後修訂**：2026-10-15\n    * **踩坑紀錄 (Gotchas)**：\n      1. API 回傳或 AI 生成的 JSON 常夾帶 Markdown 代碼塊標記 (```json ... ```)，直接 `json.loads` 會引發 `JSONDecodeError`。\n      2. 已加入自動剝離頭尾代碼標籤的容錯機制。\n    \"\"\")\n    return", "scope_id": "scope:global", "class_name": ""}, "func:safe_parse_json@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L108": {"id": "func:safe_parse_json@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L108", "label": "safe_parse_json", "raw_label": "safe_parse_json", "signature": "def safe_parse_json(raw_input", "parameters": "(raw_input: str)", "line_start": 108, "line_end": 125, "line_count": 18, "is_async": false, "source_code": "def safe_parse_json(raw_input: str) -> dict:\n    \"\"\"純 Python 核心邏輯：支援去除 Markdown 代碼塊標籤並安全解析 JSON\"\"\"\n    import json\n    text = raw_input.strip()\n    # 移除 markdown code block\n    if text.startswith(\"```json\"):\n        text = text[7:]\n    elif text.startswith(\"```\"):\n        text = text[3:]\n    if text.endswith(\"```\"):\n        text = text[:-3]\n    text = text.strip()\n\n    try:\n        parsed = json.loads(text)\n        return {\"valid\": True, \"type\": type(parsed).__name__, \"data\": parsed}\n    except Exception as e:\n        return {\"valid\": False, \"error\": str(e), \"data\": None}", "scope_id": "scope:global", "class_name": ""}, "func:_@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L129": {"id": "func:_@D:\\AntiGravity\\Agent-Study\\antigravity-marimo\\toolbox\\agent_toolbox.py:L129", "label": "Cell (L129)", "raw_label": "_", "signature": "def _(mo)", "parameters": "(mo)", "line_start": 129, "line_end": 142, "line_count": 14, "is_async": false, "source_code": "def _(mo):\n    sample_json = '{\\n  \"status\": \"success\",\\n  \"model\": \"gemini-3.8-flash\",\\n  \"tools_count\": 5\\n}'\n    json_area = mo.ui.text_area(value=sample_json, label=\"輸入 JSON 字串 (支援包含 ``` 標籤)\", rows=5)\n    parse_btn = mo.ui.run_button(label=\"🔍 驗證與解析\")\n\n    json_result = safe_parse_json(json_area.value) if (parse_btn.value or json_area.value) else None\n\n    mo.vstack([\n        mo.md(\"### 🎛️ 模組 2 自助操作面板\"),\n        json_area,\n        parse_btn,\n        mo.ui.json(json_result) if json_result else mo.md(\"_請輸入 JSON 並點擊驗證_\")\n    ])\n    return", "scope_id": "scope:global", "class_name": ""}, "func:App@external": {"id": "func:App@external", "label": "App (External/Unresolved)", "raw_label": "App (External/Unresolved)", "signature": "App (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:md@external": {"id": "func:md@external", "label": "md (External/Unresolved)", "raw_label": "md (External/Unresolved)", "signature": "md (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:splitlines@external": {"id": "func:splitlines@external", "label": "splitlines (External/Unresolved)", "raw_label": "splitlines (External/Unresolved)", "signature": "splitlines (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:sum@external": {"id": "func:sum@external", "label": "sum (External/Unresolved)", "raw_label": "sum (External/Unresolved)", "signature": "sum (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:text_area@external": {"id": "func:text_area@external", "label": "text_area (External/Unresolved)", "raw_label": "text_area (External/Unresolved)", "signature": "text_area (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:checkbox@external": {"id": "func:checkbox@external", "label": "checkbox (External/Unresolved)", "raw_label": "checkbox (External/Unresolved)", "signature": "checkbox (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:run_button@external": {"id": "func:run_button@external", "label": "run_button (External/Unresolved)", "raw_label": "run_button (External/Unresolved)", "signature": "run_button (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:vstack@external": {"id": "func:vstack@external", "label": "vstack (External/Unresolved)", "raw_label": "vstack (External/Unresolved)", "signature": "vstack (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:hstack@external": {"id": "func:hstack@external", "label": "hstack (External/Unresolved)", "raw_label": "hstack (External/Unresolved)", "signature": "hstack (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:json@external": {"id": "func:json@external", "label": "json (External/Unresolved)", "raw_label": "json (External/Unresolved)", "signature": "json (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:loads@external": {"id": "func:loads@external", "label": "loads (External/Unresolved)", "raw_label": "loads (External/Unresolved)", "signature": "loads (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:type@external": {"id": "func:type@external", "label": "type (External/Unresolved)", "raw_label": "type (External/Unresolved)", "signature": "type (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:run@external": {"id": "func:run@external", "label": "run (External/Unresolved)", "raw_label": "run (External/Unresolved)", "signature": "run (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}};
+
+    let currentSourceCode = "";
+
+    function renderTree() {
+      const root = document.getElementById('treeRoot');
+      root.innerHTML = '';
+
+      uiData.forEach((item, idx) => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'tree-item';
+        itemEl.dataset.label = item.label.toLowerCase();
+        itemEl.id = 'anchor-' + idx;
+
+        const row = document.createElement('div');
+        row.className = 'node-row';
+        row.id = 'row-anchor-' + idx;
+
+        const arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        arrow.textContent = (item.tree.children && item.tree.children.length > 0) ? '▼' : '';
+        row.appendChild(arrow);
+
+        const ctrlTag = document.createElement('span');
+        ctrlTag.className = (item.ui_type === 'Button' || item.ui_type === 'CLI Entry') ? 'tag-btn' : 'tag-ctrl';
+        ctrlTag.textContent = item.label;
+        row.appendChild(ctrlTag);
+
+        const typeTag = document.createElement('span');
+        typeTag.className = 'tag-type';
+        typeTag.textContent = item.ui_type + ' @ L' + item.line;
+        row.appendChild(typeTag);
+
+        // 整包因果代碼 (Bundle) 按鈕
+        if (item.bundle_count > 0) {
+          const bundleBtn = document.createElement('button');
+          bundleBtn.className = 'btn-bundle-code';
+          bundleBtn.textContent = '📦 關聯 ' + item.bundle_count + ' 函式代碼包';
+          bundleBtn.title = '查看該錨點觸發的所有函式原始碼集合';
+          bundleBtn.onclick = (e) => {
+            e.stopPropagation();
+            showBundle(item, row);
+          };
+          row.appendChild(bundleBtn);
+        }
+
+        // 若錨點本身就是函式且具備源碼，渲染查看按鈕
+        if (funcsData[item.anchor_id]) {
+          const inspectBtn = document.createElement('button');
+          inspectBtn.className = 'btn-action-code';
+          inspectBtn.innerHTML = '💻 查看原始碼';
+          inspectBtn.onclick = (e) => {
+            e.stopPropagation();
+            inspectFunction(item.anchor_id, row);
+          };
+          row.appendChild(inspectBtn);
+        }
+
+        row.onclick = (e) => {
+          if (e.target.tagName !== 'BUTTON') {
+            toggleCollapse(itemEl);
+            if (item.bundle_count > 0) showBundle(item, row);
+            else if (funcsData[item.anchor_id]) inspectFunction(item.anchor_id, row);
+          }
+        };
+
+        itemEl.appendChild(row);
+
+        const subTree = document.createElement('div');
+        subTree.className = 'sub-tree';
+        renderChildren(item.tree.children, subTree);
+        itemEl.appendChild(subTree);
+
+        root.appendChild(itemEl);
+      });
+    }
+
+    function renderChildren(children, parentEl) {
+      if (!children || children.length === 0) return;
+
+      children.forEach(c => {
+        const wrap = document.createElement('div');
+        wrap.className = 'tree-item';
+
+        const row = document.createElement('div');
+        row.className = 'node-row';
+
+        const arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        arrow.textContent = (c.children && c.children.length > 0) ? '▼' : '';
+        row.appendChild(arrow);
+
+        if (c.children && c.children.length > 0) {
+          row.onclick = (e) => {
+            if (e.target.tagName !== 'BUTTON') toggleCollapse(wrap);
+          };
+        }
+
+        if (c.is_await) {
+          const awaitTag = document.createElement('span');
+          awaitTag.className = 'tag-await';
+          awaitTag.textContent = '⏳ await';
+          row.appendChild(awaitTag);
+        }
+
+        if (c.edge_status === 'BLOCKED_SCOPE') {
+          const blockedTag = document.createElement('span');
+          blockedTag.className = 'tag-blocked';
+          blockedTag.textContent = '💥 BLOCKED';
+          row.appendChild(blockedTag);
+        }
+
+        const nameTag = document.createElement('span');
+        if (c.category === 'EVENT_BINDING') {
+          nameTag.className = 'tag-event';
+          nameTag.textContent = '⚡ ' + c.label;
+        } else if (c.category === 'FUNCTION_DEF') {
+          nameTag.className = 'tag-func';
+          nameTag.textContent = '🔒 ' + c.label + '()';
+          row.onclick = (e) => {
+            if (e.target.tagName !== 'BUTTON') {
+              if (c.has_code) inspectFunction(c.id, row);
+              if (c.children && c.children.length > 0) toggleCollapse(wrap);
+            }
+          };
+        } else {
+          nameTag.textContent = c.label;
+        }
+        row.appendChild(nameTag);
+
+        // 如果是函式節點且具備代碼，渲染查看原始碼按鈕
+        if (c.has_code) {
+          const inspectBtn = document.createElement('button');
+          inspectBtn.className = 'btn-action-code';
+          inspectBtn.innerHTML = '💻 查看原始碼';
+          inspectBtn.onclick = (e) => {
+            e.stopPropagation();
+            inspectFunction(c.id, row);
+          };
+          row.appendChild(inspectBtn);
+        }
+
+        wrap.appendChild(row);
+
+        if (c.children && c.children.length > 0) {
+          const sub = document.createElement('div');
+          sub.className = 'sub-tree';
+          renderChildren(c.children, sub);
+          wrap.appendChild(sub);
+        }
+
+        parentEl.appendChild(wrap);
+      });
+    }
+
+    function toggleCollapse(el) {
+      el.classList.toggle('collapsed');
+    }
+
+    function inspectFunction(funcId, rowEl) {
+      document.querySelectorAll('.node-row').forEach(r => r.classList.remove('active'));
+      if (rowEl) rowEl.classList.add('active');
+
+      const meta = funcsData[funcId];
+      if (!meta) return;
+
+      currentSourceCode = meta.source_code;
+      document.getElementById('panelTitle').textContent = '💻 函式實作: ' + meta.label + '()';
+      document.getElementById('copyCodeBtn').style.display = 'block';
+
+      const panel = document.getElementById('inspectorContent');
+      panel.innerHTML = `
+        <div class="code-meta">
+          <div><strong>函式簽章:</strong> <span style="color:var(--primary)">${escapeHtml(meta.signature)}</span></div>
+          <div><strong>精確範圍:</strong> L${meta.line_start} ~ L${meta.line_end} (共 ${meta.line_count} 行)</div>
+          <div><strong>執行型別:</strong> ${meta.is_async ? '⚡ async function (非同步 Promise)' : '同步一般函式'}</div>
+          <div><strong>作用空間:</strong> ${escapeHtml(meta.scope_id)}</div>
+        </div>
+        <div class="code-box">${escapeHtml(meta.source_code)}</div>
+      `;
+    }
+
+    function showBundle(item, rowEl) {
+      document.querySelectorAll('.node-row').forEach(r => r.classList.remove('active'));
+      if (rowEl) rowEl.classList.add('active');
+
+      currentSourceCode = item.bundle_text;
+      document.getElementById('panelTitle').textContent = '📦 ' + item.label + ' 因果代碼包 (共 ' + item.bundle_count + ' 函式)';
+      document.getElementById('copyCodeBtn').style.display = 'block';
+
+      const panel = document.getElementById('inspectorContent');
+      panel.innerHTML = `
+        <div class="code-meta">
+          <div><strong>錨點/入口:</strong> <span style="color:var(--primary)">${escapeHtml(item.label)} (${escapeHtml(item.ui_type)})</span></div>
+          <div><strong>關聯函式:</strong> 共 ${item.bundle_count} 個呼叫實作函式已由 NetworkX 打包</div>
+        </div>
+        <div class="code-box">${escapeHtml(item.bundle_text)}</div>
+      `;
+    }
+
+    function copyCode() {
+      if (currentSourceCode) {
+        navigator.clipboard.writeText(currentSourceCode);
+        const btn = document.getElementById('copyCodeBtn');
+        const orig = btn.textContent;
+        btn.textContent = '✅ 已複製！';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      }
+    }
+
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function filterTree() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      document.querySelectorAll('#treeRoot > .tree-item').forEach(el => {
+        const text = el.textContent.toLowerCase();
+        if (!query || text.includes(query)) {
+          el.style.display = 'block';
+        } else {
+          el.style.display = 'none';
+        }
+      });
+    }
+
+    // 初始化渲染
+    renderTree();
+
+    // 預設高亮第一個錨點或優先選擇核心函式
+    if (uiData.length > 0) {
+      let defaultIdx = 0;
+      const targetIdx = uiData.findIndex(d => d.label.includes('Delete') || d.label.includes('main') || d.label.includes('clean_text') || d.label.includes('safe_parse'));
+      if (targetIdx !== -1) defaultIdx = targetIdx;
+
+      const targetItem = uiData[defaultIdx];
+      const targetRow = document.getElementById('row-anchor-' + defaultIdx);
+      if (targetItem.bundle_count > 0) {
+        showBundle(targetItem, targetRow);
+      } else if (funcsData[targetItem.anchor_id]) {
+        inspectFunction(targetItem.anchor_id, targetRow);
+      }
+    }
+  </script>
+</body>
+</html>

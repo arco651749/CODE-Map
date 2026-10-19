@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>CODE-Map 全景語意因果地圖 - uia_code_diff.py</title>
+  <style>
+    :root {
+      --bg: #1e1e2e;
+      --card-bg: #252538;
+      --tree-bg: #181825;
+      --border: #313244;
+      --text: #cdd6f4;
+      --text-dim: #a6adc8;
+      --primary: #89b4fa;
+      --accent: #f5c2e7;
+      --success: #a6e3a1;
+      --warning: #f9e2af;
+      --danger: #f38ba8;
+      --code-bg: #11111b;
+      --drawer-bg: #1e1e2e;
+      --btn-bg: #313244;
+      --btn-hover: #45475a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      padding: 16px;
+      line-height: 1.5;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .header h1 {
+      font-size: 19px;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header h1 span {
+      font-size: 13px;
+      color: var(--text-dim);
+      font-weight: normal;
+    }
+    .badge-pass {
+      background: rgba(166, 227, 161, 0.15);
+      color: var(--success);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--success);
+    }
+    .badge-danger {
+      background: rgba(243, 139, 168, 0.15);
+      color: var(--danger);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--danger);
+    }
+    .stats-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      flex: 1;
+    }
+    .stat-val {
+      font-size: 20px;
+      font-weight: bold;
+      color: var(--primary);
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .search-input {
+      flex: 1;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: var(--primary);
+    }
+    .layout {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .tree-col {
+      flex: 1.1;
+      background: var(--tree-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12.5px;
+      overflow-x: auto;
+      max-height: 720px;
+      overflow-y: auto;
+    }
+    .code-col {
+      flex: 0.9;
+      background: var(--drawer-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      position: sticky;
+      top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 720px;
+    }
+    .tree-item {
+      margin-bottom: 4px;
+    }
+    .node-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.1s;
+    }
+    .node-row:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .node-row.active {
+      background: rgba(137, 180, 250, 0.2) !important;
+      border-left: 3px solid var(--primary);
+    }
+    .tag-ctrl {
+      color: #89dceb;
+      font-weight: 700;
+    }
+    .tag-btn {
+      color: #89b4fa;
+      font-weight: 700;
+      background: rgba(137, 180, 250, 0.15);
+      padding: 1px 7px;
+      border-radius: 4px;
+      border: 1px solid rgba(137, 180, 250, 0.3);
+    }
+    .tag-event {
+      color: #f9e2af;
+      font-weight: 600;
+    }
+    .tag-func {
+      color: #a6e3a1;
+      font-weight: 600;
+    }
+    .tag-await {
+      color: #fab387;
+      font-size: 10px;
+      font-weight: bold;
+      background: rgba(250, 179, 135, 0.15);
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+    .tag-blocked {
+      color: #f38ba8;
+      font-size: 10px;
+      font-weight: bold;
+      background: rgba(243, 139, 168, 0.15);
+      padding: 0 4px;
+      border-radius: 3px;
+      border: 1px solid var(--danger);
+    }
+    .tag-type {
+      font-size: 11px;
+      color: var(--text-dim);
+      background: var(--card-bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    
+    /* 核心操作按鈕 */
+    .btn-action-code {
+      margin-left: auto;
+      background: #89b4fa;
+      color: #11111b;
+      border: none;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      transition: all 0.15s;
+    }
+    .btn-action-code:hover {
+      background: #b4befe;
+      transform: translateY(-1px);
+    }
+    .btn-bundle-code {
+      margin-left: 6px;
+      background: rgba(245, 194, 231, 0.2);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-bundle-code:hover {
+      background: var(--accent);
+      color: #11111b;
+    }
+
+    .sub-tree {
+      margin-left: 18px;
+      border-left: 1px dashed var(--border);
+      padding-left: 8px;
+    }
+    .arrow {
+      color: var(--text-dim);
+      font-size: 10px;
+      display: inline-block;
+      width: 12px;
+      transition: transform 0.15s;
+    }
+    .collapsed > .sub-tree { display: none; }
+    .collapsed > .node-row .arrow { transform: rotate(-90deg); }
+    
+    /* Code Viewer Panel */
+    .code-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--primary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .code-meta {
+      font-size: 12px;
+      color: var(--text);
+      background: var(--card-bg);
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .code-box {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12px;
+      color: #cdd6f4;
+      overflow-y: auto;
+      max-height: 520px;
+      white-space: pre;
+      line-height: 1.45;
+    }
+    .copy-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 3px 9px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .copy-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>🌲 CODE-Map 全景語意因果地圖 <span>(uia_code_diff.py)</span></h1>
+    <div class="badge-pass">🟢 READY_TO_SHIP</div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-val">1</div>
+      <div class="stat-label">錨點/入口數量 (Anchors)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">33</div>
+      <div class="stat-label">已截取原始碼函式 (NetworkX Props)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--success);">0</div>
+      <div class="stat-label">作用域阻隔 (Scope Errors)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--success);">0</div>
+      <div class="stat-label">危害調用 (Hazards)</div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" id="searchInput" class="search-input" placeholder="🔍 即時搜尋控制項、按鈕、CLI 或函式名稱..." oninput="filterTree()">
+  </div>
+
+  <div class="layout">
+    <div class="tree-col" id="treeRoot">
+      <!-- 樹狀控制項將透過 JavaScript 動態渲染 -->
+    </div>
+
+    <div class="code-col" id="codePanel">
+      <div class="code-title">
+        <span id="panelTitle">💻 程式碼切片檢視器</span>
+        <button class="copy-btn" id="copyCodeBtn" onclick="copyCode()">複製代碼 📋</button>
+      </div>
+      <div id="inspectorContent">
+        <!-- 預設載入首個錨點之代碼 -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const uiData = [{"anchor_id": "ctrl:CLI:main@legacy/uia_code_diff.py:L568", "label": "#CLI: main", "ui_type": "CLI Entry", "line": 568, "tree": {"id": "ctrl:CLI:main@legacy/uia_code_diff.py:L568", "label": "#CLI: main", "category": "UI_CONTROL", "has_code": false, "children": [{"id": "event:CLI.run@legacy/uia_code_diff.py:L568", "label": "run()", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:main@legacy/uia_code_diff.py:L568", "label": "main", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:ArgumentParser@external", "label": "ArgumentParser (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:add_argument@external", "label": "add_argument (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:parse_args@external", "label": "parse_args (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:UIACodeDiffAnalyzer.analyze@legacy/uia_code_diff.py:L29", "label": "UIACodeDiffAnalyzer.analyze", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:UIACodeDiffAnalyzer.get_git_diff@legacy/uia_code_diff.py:L21", "label": "UIACodeDiffAnalyzer.get_git_diff", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:run@external", "label": "run (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:RuntimeError@external", "label": "RuntimeError (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "作用域可達 (定義於 scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11)"}, {"id": "func:splitlines@external", "label": "splitlines (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:UIACodeDiffAnalyzer._analyze_hunks@legacy/uia_code_diff.py:L65", "label": "UIACodeDiffAnalyzer._analyze_hunks", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:splitlines@external", "label": "splitlines (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:search@external", "label": "search (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:group@external", "label": "group (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:finditer@external", "label": "finditer (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:groups@external", "label": "groups (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:lower@external", "label": "lower (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:match@external", "label": "match (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:findall@external", "label": "findall (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "作用域可達 (定義於 scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11)"}, {"id": "func:UIACodeDiffAnalyzer._extract_controls@legacy/uia_code_diff.py:L218", "label": "UIACodeDiffAnalyzer._extract_controls", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:findall@external", "label": "findall (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:lower@external", "label": "lower (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "作用域可達 (定義於 scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11)"}, {"id": "func:UIACodeDiffAnalyzer._extract_wiring_simple@legacy/uia_code_diff.py:L226", "label": "UIACodeDiffAnalyzer._extract_wiring_simple", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:findall@external", "label": "findall (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "作用域可達 (定義於 scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11)"}, {"id": "func:UIACodeDiffAnalyzer._extract_keys@legacy/uia_code_diff.py:L234", "label": "UIACodeDiffAnalyzer._extract_keys", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:set@external", "label": "set (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:findall@external", "label": "findall (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:add@external", "label": "add (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}, {"id": "func:list@external", "label": "list (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "作用域可達 (定義於 scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11)"}, {"id": "func:UIACodeDiffAnalyzer._extract_cleanups@legacy/uia_code_diff.py:L241", "label": "UIACodeDiffAnalyzer._extract_cleanups", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:search@external", "label": "search (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "作用域可達 (定義於 scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11)"}, {"id": "func:UIACodeDiffAnalyzer._extract_scope_changes@legacy/uia_code_diff.py:L249", "label": "UIACodeDiffAnalyzer._extract_scope_changes", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:search@external", "label": "search (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "作用域可達 (定義於 scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11)"}, {"id": "func:UIACodeDiffAnalyzer._extract_files@legacy/uia_code_diff.py:L256", "label": "UIACodeDiffAnalyzer._extract_files", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:findall@external", "label": "findall (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "作用域可達 (定義於 scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11)"}], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "呼叫類別實例方法 (scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11)"}, {"id": "func:UIACodeDiffAnalyzer.render_markdown_report@legacy/uia_code_diff.py:L259", "label": "UIACodeDiffAnalyzer.render_markdown_report", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:sub@external", "label": "sub (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "呼叫類別實例方法 (scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11)"}, {"id": "func:UIACodeDiffAnalyzer.render_html_dashboard@legacy/uia_code_diff.py:L335", "label": "UIACodeDiffAnalyzer.render_html_dashboard", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "func:open@external", "label": "open (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或模組外部函式"}], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "呼叫類別實例方法 (scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11)"}], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "觸發 main() 流程"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "CLI 命令列入口執行"}]}, "bundle_count": 30, "bundle_funcs": ["func:sub@external", "func:UIACodeDiffAnalyzer.analyze@legacy/uia_code_diff.py:L29", "func:UIACodeDiffAnalyzer._extract_files@legacy/uia_code_diff.py:L256", "func:list@external", "func:group@external", "func:groups@external", "func:splitlines@external", "func:search@external", "func:UIACodeDiffAnalyzer._extract_cleanups@legacy/uia_code_diff.py:L241", "func:lower@external", "func:UIACodeDiffAnalyzer.render_markdown_report@legacy/uia_code_diff.py:L259", "func:UIACodeDiffAnalyzer._analyze_hunks@legacy/uia_code_diff.py:L65", "func:main@legacy/uia_code_diff.py:L568", "func:UIACodeDiffAnalyzer._extract_controls@legacy/uia_code_diff.py:L218", "func:UIACodeDiffAnalyzer.render_html_dashboard@legacy/uia_code_diff.py:L335", "func:RuntimeError@external", "func:set@external", "func:run@external", "func:open@external", "func:add@external", "func:add_argument@external", "func:UIACodeDiffAnalyzer._extract_scope_changes@legacy/uia_code_diff.py:L249", "func:parse_args@external", "func:UIACodeDiffAnalyzer._extract_wiring_simple@legacy/uia_code_diff.py:L226", "func:UIACodeDiffAnalyzer.get_git_diff@legacy/uia_code_diff.py:L21", "func:finditer@external", "func:ArgumentParser@external", "func:match@external", "func:findall@external", "func:UIACodeDiffAnalyzer._extract_keys@legacy/uia_code_diff.py:L234"], "bundle_text": "# 📦 CODE-Map 因果切片代碼包: ctrl:CLI:main@legacy/uia_code_diff.py:L568\n\n## 🔹 def analyze(self) -> Dict[str, Any] (legacy/uia_code_diff.py: L29~L63)\n```\ndef analyze(self) -> Dict[str, Any]:\n        diff_text = self.get_git_diff()\n        if not diff_text.strip():\n            return {\"empty\": True, \"message\": \"無任何 Git 變更\"}\n\n        added_lines = []\n        removed_lines = []\n\n        for line in diff_text.splitlines():\n            if line.startswith(\"+++\") or line.startswith(\"---\"):\n                continue\n            if line.startswith(\"+\"):\n                added_lines.append(line[1:])\n            elif line.startswith(\"-\"):\n                removed_lines.append(line[1:])\n\n        added_text = \"\\n\".join(added_lines)\n        removed_text = \"\\n\".join(removed_lines)\n\n        # 深入 diff 結構解析 Hunk、呼叫作用域與宣告位置\n        hunk_analysis = self._analyze_hunks(diff_text)\n\n        analysis = {\n            \"controls_added\": self._extract_controls(added_text) + hunk_analysis[\"dynamic_controls\"],\n            \"controls_removed\": self._extract_controls(removed_text),\n            \"wires_added\": hunk_analysis[\"wires_added\"],\n            \"wires_removed\": self._extract_wiring_simple(removed_text),\n            \"keys_handled\": self._extract_keys(added_text),\n            \"cleanups\": self._extract_cleanups(added_text),\n            \"scope_changes\": self._extract_scope_changes(diff_text),\n            \"scope_violations\": hunk_analysis[\"scope_violations\"],\n            \"hazards\": hunk_analysis[\"hazards\"],\n            \"files_changed\": self._extract_files(diff_text),\n        }\n        return analysis\n```\n\n## 🔹 def _extract_files(self, diff_text (legacy/uia_code_diff.py: L256~L257)\n```\ndef _extract_files(self, diff_text: str) -> List[str]:\n        return re.findall(r'diff --git a/(.*?) b/', diff_text)\n```\n\n## 🔹 def _extract_cleanups(self, text (legacy/uia_code_diff.py: L241~L247)\n```\ndef _extract_cleanups(self, text: str) -> List[str]:\n        cleanups = []\n        if \"removeEventListener\" in text:\n            cleanups.append(\"removeEventListener (清理事件監聽器)\")\n        if re.search(r'\\bcleanup\\s*\\(', text):\n            cleanups.append(\"cleanup() (定義清理函式)\")\n        return cleanups\n```\n\n## 🔹 def render_markdown_report(self, analysis (legacy/uia_code_diff.py: L259~L333)\n```\ndef render_markdown_report(self, analysis: Dict[str, Any]) -> str:\n        if analysis.get(\"empty\"):\n            return \"### ⚠️ 目前版本無任何代碼差異。\"\n\n        md = []\n        md.append(\"## 🔍 UIA 語意樹代碼變更驗收報告 (UIA Semantic Code Diff)\")\n        md.append(f\"> **比對範圍**：`{self.diff_range}`  \")\n        md.append(f\"> **影響檔案**：`{', '.join(analysis['files_changed'])}`\\n\")\n\n        # 1. Mermaid UIA 樹狀圖\n        md.append(\"### 1. 🌲 UIA 控制項樹結構演進 (Visual Tree)\")\n        md.append(\"```mermaid\")\n        md.append(\"flowchart TD\")\n        md.append('    Root[\"Root Window / DOM Tree\"]')\n\n        added_ctrls = analysis[\"controls_added\"]\n        if added_ctrls:\n            md.append('    Root ==>|\"➕ 新增控制項子樹\"| SubTree[\"新增 UIA 元件群\"]')\n            for c in added_ctrls:\n                node_id = re.sub(r'[^a-zA-Z0-9_]', '_', c[\"id\"])\n                md.append(f'    SubTree --> {node_id}[\"{c[\"type\"]}: #{c[\"id\"]}\"]')\n        else:\n            md.append('    Root --> Stable[\"控制項樹結構無新增節點 (純邏輯變更)\"]')\n        md.append(\"```\\n\")\n\n        # 2. 語意差分驗收表格\n        md.append(\"### 2. 📋 語意驗收差分清單 (Semantic Invariant Table)\")\n        md.append(\"| 類型 | 標籤 | 項目 | 語意說明與安全性評估 |\")\n        md.append(\"| :--- | :--- | :--- | :--- |\")\n\n        for c in analysis[\"controls_added\"]:\n            md.append(f\"| **控制項** | `[+] CONTROL` | `#{c['id']}` ({c['type']}) | 介面長出新控制項節點。 |\")\n\n        for w in analysis[\"wires_added\"]:\n            md.append(f\"| **接線** | `[+] WIRED` | `{w['target']} -> on('{w['event']}')` | 銜接至目標函式 `{w['handler']}`（觸發於 `{w.get('caller_scope', 'module')}`）。 |\")\n\n        if analysis[\"keys_handled\"]:\n            keys_str = \", \".join([f\"`{k}`\" for k in analysis[\"keys_handled\"]])\n            md.append(f\"| **快速鍵** | `[+] SHORTCUT` | {keys_str} | 支援無障礙鍵盤導航操作。 |\")\n\n        for cl in analysis[\"cleanups\"]:\n            md.append(f\"| **生命週期** | `[-] LEAK_GUARD` | `{cl}` | **防洩漏守衛**：具備銷毀清理機制，防止監聽器重複堆疊。 |\")\n\n        for sc in analysis[\"scope_changes\"]:\n            md.append(f\"| **作用域提升** | `[*] SCOPE_FIX` | `{sc}` | 解決閉包作用域隱蔽問題，開放全域調用。 |\")\n\n        for sv in analysis.get(\"scope_violations\", []):\n            md.append(f\"| **作用域違規** | `[!] SCOPE_ERROR` | `{sv['handler']}` | 💥 **{sv['issue']}** |\")\n\n        for hz in analysis.get(\"hazards\", []):\n            md.append(f\"| **禁忌 API** | `[!] HAZARD` | `{hz['api']}` | ⚠️ **{hz['risk']}** |\")\n\n        md.append(\"\\n### 3. 🛡️ 品質閘道判定 (Quality Gate Verdict)\")\n        has_violations = len(analysis.get(\"scope_violations\", [])) > 0\n        has_hazards = len(analysis.get(\"hazards\", [])) > 0\n        has_wires = len(analysis[\"wires_added\"]) > 0\n        has_controls = len(analysis[\"controls_added\"]) > 0\n        has_cleanups = len(analysis[\"cleanups\"]) > 0\n\n        if has_violations or has_hazards:\n            md.append(\"> 🔴 **品質閘道阻擋 (BLOCKED_BY_INVARIANTS)**：\")\n            if has_violations:\n                for sv in analysis[\"scope_violations\"]:\n                    md.append(f\"> - ❌ **作用域致命錯誤**：{sv['issue']}\")\n            if has_hazards:\n                for hz in analysis[\"hazards\"]:\n                    md.append(f\"> - ⚠️ **禁忌阻塞 API**：偵測到 `{hz['api']}`，{hz['risk']}\")\n        elif has_controls and not has_wires:\n            md.append(\"> ⚠️ **警告 (UNWIRED_RISK)**：長出了新控制項，但未偵測到事件監聽器接線！請確認是否有電線未插。\")\n        elif has_controls and has_wires and has_cleanups:\n            md.append(\"> 🟢 **驗收通過 (READY_TO_SHIP)**：控制項結構完整、電線通電驗證無誤、閉包作用域安全、且自帶銷毀清理守門員！\")\n        else:\n            md.append(\"> 🟢 **邏輯更新完成**：代碼已更新，無控制項孤兒或作用域異常風險。\")\n\n        return \"\\n\".join(md)\n```\n\n## 🔹 def _analyze_hunks(self, diff_text (legacy/uia_code_diff.py: L65~L216)\n```\ndef _analyze_hunks(self, diff_text: str) -> Dict[str, Any]:\n        \"\"\"按 Hunk 區塊進行多行語法分析，精確提取事件接線、作用域深度與禁忌 API\"\"\"\n        dynamic_controls = []\n        wires_added = []\n        declared_functions = {}  # name -> {enclosing, indent, is_top_level, file}\n        hazards = []\n        scope_violations = []\n\n        # 1. 將 Diff 切割為檔案與 Hunk 區塊\n        current_file = \"\"\n        current_enclosing = \"module\"\n        hunks = []  # list of {file, enclosing, lines, text}\n        curr_hunk_lines = []\n\n        for line in diff_text.splitlines():\n            if line.startswith(\"diff --git\"):\n                if curr_hunk_lines:\n                    hunks.append({\n                        \"file\": current_file,\n                        \"enclosing\": current_enclosing,\n                        \"lines\": curr_hunk_lines,\n                        \"text\": \"\\n\".join(curr_hunk_lines)\n                    })\n                    curr_hunk_lines = []\n                match = re.search(r'b/(.*)$', line)\n                current_file = match.group(1) if match else \"\"\n                current_enclosing = \"module\"\n                continue\n\n            if line.startswith(\"@@\"):\n                if curr_hunk_lines:\n                    hunks.append({\n                        \"file\": current_file,\n                        \"enclosing\": current_enclosing,\n                        \"lines\": curr_hunk_lines,\n                        \"text\": \"\\n\".join(curr_hunk_lines)\n                    })\n                    curr_hunk_lines = []\n                \n                # 擷取外層函式名稱\n                match = re.search(r'@@\\s+[^@]+@@\\s*(?:(?:async\\s+)?function\\s+)?([a-zA-Z0-9_$]+)', line)\n                if match and match.group(1):\n                    current_enclosing = match.group(1).strip()\n                else:\n                    current_enclosing = \"module\"\n                continue\n\n            if line.startswith(\"+\") and not line.startswith(\"+++\"):\n                curr_hunk_lines.append(line[1:])\n\n        if curr_hunk_lines:\n            hunks.append({\n                \"file\": current_file,\n                \"enclosing\": current_enclosing,\n                \"lines\": curr_hunk_lines,\n                \"text\": \"\\n\".join(curr_hunk_lines)\n            })\n\n        # 2. 遍歷每個 Hunk 進行多行語法匹配\n        for hunk in hunks:\n            h_file = hunk[\"file\"]\n            h_enclosing = hunk[\"enclosing\"]\n            h_text = hunk[\"text\"]\n\n            # (A) 偵測動態建立的 DOM 控制項\n            for elem_match in re.finditer(r'const\\s+([a-zA-Z0-9_$]+)\\s*=\\s*document\\.createElement\\([\\'\"]([a-zA-Z0-9_-]+)[\\'\"]\\)', h_text):\n                var_name, tag = elem_match.groups()\n                ctype = \"Button\" if tag.lower() == \"button\" or \"btn\" in var_name.lower() else \"Element\"\n                dynamic_controls.append({\"tag\": tag, \"id\": var_name, \"type\": f\"Dynamic {ctype} ({var_name})\"})\n\n            # (B) 偵測函式宣告位置與縮排\n            for line in hunk[\"lines\"]:\n                func_decl = re.match(r'^(\\s*)(?:async\\s+)?function\\s+([a-zA-Z0-9_$]+)', line)\n                if func_decl:\n                    indent = len(func_decl.group(1))\n                    func_name = func_decl.group(2)\n                    is_top_level = (indent == 0)\n                    declared_functions[func_name] = {\n                        \"enclosing\": h_enclosing if not is_top_level else \"module\",\n                        \"indent\": indent,\n                        \"is_top_level\": is_top_level,\n                        \"file\": h_file\n                    }\n\n            # (C) 偵測事件監聽接線 (支援多行箭頭函式內部實質業務呼叫)\n            pat_block = r'([a-zA-Z0-9_$.?]+)\\.addEventListener\\(\\s*[\\'\"]([a-zA-Z0-9_-]+)[\\'\"]\\s*,\\s*(?:async\\s*)?(?:\\([^)]*\\)|[a-zA-Z0-9_$]+)\\s*=>\\s*\\{([\\s\\S]*?)\\}\\s*\\)'\n            for m in re.finditer(pat_block, h_text):\n                target, event, body = m.groups()\n                calls = re.findall(r'(?:await\\s+)?([a-zA-Z0-9_$]+)\\(', body)\n                meaningful = [c for c in calls if c not in ('stopPropagation', 'preventDefault', 'setTimeout', 'showToast', 'if', 'Boolean')]\n                for handler in meaningful:\n                    wires_added.append({\n                        \"target\": target,\n                        \"event\": event,\n                        \"handler\": handler,\n                        \"caller_scope\": h_enclosing,\n                        \"file\": h_file\n                    })\n\n            direct_matches = re.finditer(\n                r'([a-zA-Z0-9_$.?]+)\\.addEventListener\\(\\s*[\\'\"]([a-zA-Z0-9_-]+)[\\'\"]\\s*,\\s*([a-zA-Z0-9_$]+)\\s*\\)',\n                h_text\n            )\n            for m in direct_matches:\n                target, event, handler = m.groups()\n                if handler not in (\"async\", \"function\"):\n                    wires_added.append({\n                        \"target\": target,\n                        \"event\": event,\n                        \"handler\": handler,\n                        \"caller_scope\": h_enclosing,\n                        \"file\": h_file\n                    })\n\n            # (D) 偵測 Webview 禁忌阻塞 API\n            if \"window.confirm\" in h_text:\n                hazards.append({\n                    \"type\": \"BLOCKING_DIALOG\",\n                    \"api\": \"window.confirm()\",\n                    \"file\": h_file,\n                    \"risk\": \"在 Webview / Extension 中會直接凍結 UI 執行緒或被 Chromium 靜音吞掉！\"\n                })\n            if \"window.alert\" in h_text:\n                hazards.append({\n                    \"type\": \"BLOCKING_DIALOG\",\n                    \"api\": \"window.alert()\",\n                    \"file\": h_file,\n                    \"risk\": \"在 Webview / Extension 中會直接凍結 UI 執行緒！\"\n                })\n\n        # 3. 作用域可達性校驗 (Scope Reachability Check)\n        for w in wires_added:\n            handler = w[\"handler\"]\n            caller_scope = w.get(\"caller_scope\", \"module\")\n            if handler in declared_functions:\n                decl = declared_functions[handler]\n                # 若函式被鎖在某個內部閉包中 (非 module 頂層)，且與呼叫者作用域不同\n                if not decl[\"is_top_level\"] and decl[\"enclosing\"] != caller_scope:\n                    scope_violations.append({\n                        \"handler\": handler,\n                        \"declared_in\": decl[\"enclosing\"],\n                        \"caller_scope\": caller_scope,\n                        \"file\": w[\"file\"],\n                        \"issue\": f\"函式 `{handler}` 被深鎖在 `{decl['enclosing']}` 內部閉包中，但卻在 `{caller_scope}` 嘗試調用，執行期將直接崩潰拋出 ReferenceError: {handler} is not defined！\"\n                    })\n\n        return {\n            \"dynamic_controls\": dynamic_controls,\n            \"wires_added\": wires_added,\n            \"hazards\": hazards,\n            \"scope_violations\": scope_violations\n        }\n```\n\n## 🔹 def main() (legacy/uia_code_diff.py: L568~L582)\n```\ndef main():\n    parser = argparse.ArgumentParser(description=\"UIA Style Semantic Code Diff Analyzer\")\n    parser.add_argument(\"--repo\", default=\".\", help=\"目標 Git 倉庫目錄路徑\")\n    parser.add_argument(\"--diff\", default=\"HEAD~1\", help=\"Git diff 比對範圍 (例如: HEAD~1, 或 commitA commitB)\")\n    parser.add_argument(\"--html\", default=None, help=\"輸出 HTML 視覺化儀表板檔案路徑\")\n    args = parser.parse_args()\n\n    analyzer = UIACodeDiffAnalyzer(repo_path=args.repo, diff_range=args.diff)\n    analysis = analyzer.analyze()\n    report = analyzer.render_markdown_report(analysis)\n    print(report)\n\n    if args.html:\n        analyzer.render_html_dashboard(analysis, args.html)\n        print(f\"\\n[HTML 儀表板已輸出至]: {args.html}\")\n```\n\n## 🔹 def _extract_controls(self, text (legacy/uia_code_diff.py: L218~L224)\n```\ndef _extract_controls(self, text: str) -> List[Dict[str, str]]:\n        controls = []\n        id_matches = re.findall(r'<([a-zA-Z0-9_-]+)[^>]*\\bid=[\"\\']([^\"\\']+)[\"\\']', text)\n        for tag, cid in id_matches:\n            ctype = \"Button\" if \"btn\" in cid.lower() or tag == \"button\" else (\"Modal/Pane\" if \"modal\" in cid.lower() else \"Element\")\n            controls.append({\"tag\": tag, \"id\": cid, \"type\": ctype})\n        return controls\n```\n\n## 🔹 def render_html_dashboard(self, analysis (legacy/uia_code_diff.py: L335~L565)\n```\ndef render_html_dashboard(self, analysis: Dict[str, Any], output_path: str):\n        \"\"\"生成 100% 自包含的現代化 UIA 語意差分視覺化儀表板 HTML\"\"\"\n        ctrl_nodes = \"\"\n        for c in analysis.get(\"controls_added\", []):\n            ctrl_nodes += f\"\"\"\n            <div class=\"node-pill node-added\">\n                <span class=\"node-tag\">[+] {c['type']}</span>\n                <span class=\"node-name\">#{c['id']}</span>\n            </div>\n            \"\"\"\n\n        wire_rows = \"\"\n        for w in analysis.get(\"wires_added\", []):\n            caller = w.get(\"caller_scope\", \"module\")\n            wire_rows += f\"\"\"\n            <tr>\n                <td><span class=\"badge badge-wire\">⚡ WIRED</span></td>\n                <td><code>{w['target']}</code></td>\n                <td><code>on('{w['event']}')</code></td>\n                <td><code>{w['handler']}</code> (scope: {caller})</td>\n                <td><span class=\"status-ok\">🟢 已接線</span></td>\n            </tr>\n            \"\"\"\n\n        leak_items = \"\".join([f\"<li>🛡️ {l}</li>\" for l in analysis.get(\"cleanups\", [])]) or \"<li>無新增清理函式</li>\"\n        keys_badges = \" \".join([f\"<span class='badge badge-key'>{k}</span>\" for k in analysis.get(\"keys_handled\", [])]) or \"無\"\n\n        # 作用域違規與禁忌 API 警示區塊\n        has_violations = len(analysis.get(\"scope_violations\", [])) > 0\n        has_hazards = len(analysis.get(\"hazards\", [])) > 0\n        \n        alerts_html = \"\"\n        if has_violations or has_hazards:\n            alerts_html += \"\"\"<div class=\"alerts-container\">\"\"\"\n            for sv in analysis.get(\"scope_violations\", []):\n                alerts_html += f\"\"\"\n                <div class=\"alert-box alert-danger\">\n                    <span class=\"alert-icon\">💥</span>\n                    <div>\n                        <strong>[!] 作用域致命囚禁 (Scope Trap):</strong>\n                        <p>{sv['issue']}</p>\n                    </div>\n                </div>\n                \"\"\"\n            for hz in analysis.get(\"hazards\", []):\n                alerts_html += f\"\"\"\n                <div class=\"alert-box alert-warning\">\n                    <span class=\"alert-icon\">⚠️</span>\n                    <div>\n                        <strong>[!] Webview 禁忌阻塞 API ({hz['api']}):</strong>\n                        <p>{hz['risk']}</p>\n                    </div>\n                </div>\n                \"\"\"\n            alerts_html += \"\"\"</div>\"\"\"\n\n        if has_violations or has_hazards:\n            verdict_class = \"verdict-blocked\"\n            verdict_icon = \"🔴\"\n            verdict_text = \"【UIA 品質閘道阻擋】：發布被拒絕 (BLOCKED BY INVARIANTS) —— 偵測到深層閉包作用域囚禁或禁忌阻塞 API，上線必翻車！\"\n        elif len(analysis.get(\"controls_added\", [])) > 0 and len(analysis.get(\"wires_added\", [])) == 0:\n            verdict_class = \"verdict-warning\"\n            verdict_icon = \"⚠️\"\n            verdict_text = \"【UIA 品質閘道警告】：發現孤兒控制項 (UNWIRED_RISK) —— 介面長出元件但電線未通！\"\n        else:\n            verdict_class = \"verdict-ok\"\n            verdict_icon = \"🟢\"\n            verdict_text = \"【UIA 品質閘道判定】：驗收通過 (READY TO SHIP) —— 控制項結構完整、電線通電驗證無誤、作用域安全！\"\n\n        html_content = f\"\"\"<!DOCTYPE html>\n<html lang=\"zh-TW\">\n<head>\n    <meta charset=\"UTF-8\">\n    <title>UIA Semantic Diff Dashboard</title>\n    <style>\n        :root {{\n            --bg: #1e1e2e;\n            --card: #252538;\n            --border: #3b3b54;\n            --text: #cdd6f4;\n            --green: #a6e3a1;\n            --blue: #89b4fa;\n            --yellow: #f9e2af;\n            --red: #f38ba8;\n        }}\n        * {{ box-sizing: border-box; margin: 0; padding: 0; }}\n        body {{\n            background: var(--bg);\n            color: var(--text);\n            font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif;\n            padding: 24px;\n            line-height: 1.5;\n        }}\n        .header {{ margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }}\n        .header h1 {{ font-size: 20px; color: #fff; display: flex; align-items: center; gap: 10px; }}\n        .badge {{ font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }}\n        .badge-range {{ background: #313244; color: var(--blue); border: 1px solid var(--border); }}\n        .badge-wire {{ background: rgba(166, 227, 161, 0.2); color: var(--green); }}\n        .badge-key {{ background: rgba(249, 226, 175, 0.2); color: var(--yellow); }}\n        \n        .alerts-container {{ margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; }}\n        .alert-box {{\n            padding: 14px 18px;\n            border-radius: 8px;\n            display: flex;\n            align-items: flex-start;\n            gap: 12px;\n            font-size: 13px;\n        }}\n        .alert-danger {{ background: rgba(243, 139, 168, 0.15); border: 1px solid var(--red); color: var(--red); }}\n        .alert-warning {{ background: rgba(249, 226, 175, 0.15); border: 1px solid var(--yellow); color: var(--yellow); }}\n        .alert-icon {{ font-size: 20px; }}\n        \n        .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }}\n        @media(max-width: 800px) {{ .grid {{ grid-template-columns: 1fr; }} }}\n        \n        .card {{\n            background: var(--card);\n            border: 1px solid var(--border);\n            border-radius: 8px;\n            padding: 16px;\n        }}\n        .card-title {{ font-size: 14px; font-weight: 700; margin-bottom: 12px; color: #fff; display: flex; justify-content: space-between; }}\n        \n        .node-container {{ display: flex; flex-direction: column; gap: 8px; }}\n        .node-pill {{\n            background: #181825;\n            border: 1px solid var(--border);\n            border-left: 4px solid var(--green);\n            padding: 8px 12px;\n            border-radius: 6px;\n            display: flex;\n            align-items: center;\n            justify-content: space-between;\n            font-size: 13px;\n        }}\n        .node-tag {{ font-family: monospace; font-weight: bold; color: var(--green); }}\n        .node-name {{ font-family: monospace; color: #bac2de; }}\n        \n        table {{ width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left; }}\n        th, td {{ padding: 8px 10px; border-bottom: 1px solid var(--border); }}\n        th {{ color: #a6adc8; font-size: 11px; text-transform: uppercase; }}\n        .status-ok {{ color: var(--green); font-weight: 600; }}\n        \n        .verdict-box {{\n            border-radius: 8px;\n            padding: 14px 18px;\n            display: flex;\n            align-items: center;\n            gap: 12px;\n            font-weight: 600;\n            font-size: 14px;\n        }}\n        .verdict-ok {{ background: rgba(166, 227, 161, 0.1); border: 1px solid var(--green); color: var(--green); }}\n        .verdict-blocked {{ background: rgba(243, 139, 168, 0.15); border: 1px solid var(--red); color: var(--red); }}\n        .verdict-warning {{ background: rgba(249, 226, 175, 0.15); border: 1px solid var(--yellow); color: var(--yellow); }}\n    </style>\n</head>\n<body>\n    <div class=\"header\">\n        <h1>\n            <span>🌲 UIA 語意樹代碼差分儀表板</span>\n            <span class=\"badge badge-range\">Range: {self.diff_range}</span>\n        </h1>\n        <p style=\"color:#a6adc8; font-size:13px; margin-top:4px;\">\n            Target Repository: <code>{self.repo_path}</code>\n        </p>\n    </div>\n\n    {alerts_html}\n\n    <div class=\"grid\">\n        <!-- Controls Subtree -->\n        <div class=\"card\">\n            <div class=\"card-title\">\n                <span>➕ 新增 UIA 控制項節點 (Controls Subtree)</span>\n                <span style=\"color:var(--green); font-size:12px;\">{len(analysis.get(\"controls_added\", []))} Nodes</span>\n            </div>\n            <div class=\"node-container\">\n                {ctrl_nodes or '<div style=\"color:#6c7086; font-size:13px;\">無新增控制項</div>'}\n            </div>\n        </div>\n\n        <!-- Invariants & Lifecycle -->\n        <div class=\"card\">\n            <div class=\"card-title\">\n                <span>🛡️ 鍵盤快速鍵與生命週期守衛</span>\n            </div>\n            <div style=\"font-size:13px; margin-bottom:12px;\">\n                <span style=\"color:#a6adc8;\">捕獲快速鍵：</span> {keys_badges}\n            </div>\n            <div style=\"font-size:13px;\">\n                <span style=\"color:#a6adc8; display:block; margin-bottom:6px;\">銷毀守衛 (Anti-Memory Leak)：</span>\n                <ul style=\"padding-left:18px; color:var(--green); font-size:12px;\">\n                    {leak_items}\n                </ul>\n            </div>\n        </div>\n    </div>\n\n    <!-- Wiring Table -->\n    <div class=\"card\" style=\"margin-bottom:20px;\">\n        <div class=\"card-title\">\n            <span>⚡ 電線通電檢查 (Event Wiring Check)</span>\n        </div>\n        <table>\n            <thead>\n                <tr>\n                    <th>標籤</th>\n                    <th>觸發對象 (Target)</th>\n                    <th>事件類型 (Event)</th>\n                    <th>銜接函式 (Handler)</th>\n                    <th>通電狀態</th>\n                </tr>\n            </thead>\n            <tbody>\n                {wire_rows or '<tr><td colspan=\"5\" style=\"color:#6c7086; text-align:center;\">無直接 addEventListener 變更</td></tr>'}\n            </tbody>\n        </table>\n    </div>\n\n    <!-- Quality Gate Verdict -->\n    <div class=\"verdict-box {verdict_class}\">\n        <span style=\"font-size:20px;\">{verdict_icon}</span>\n        <span>{verdict_text}</span>\n    </div>\n</body>\n</html>\n\"\"\"\n        with open(output_path, \"w\", encoding=\"utf-8\") as f:\n            f.write(html_content)\n```\n\n## 🔹 def _extract_scope_changes(self, diff_text (legacy/uia_code_diff.py: L249~L254)\n```\ndef _extract_scope_changes(self, diff_text: str) -> List[str]:\n        scopes = []\n        if re.search(r'-\\s*async\\s+function\\s+init\\b', diff_text) or re.search(r'-\\s*function\\s+closePreview\\b', diff_text):\n            if re.search(r'\\+\\s*function\\s+closePreview\\b', diff_text):\n                scopes.append(\"closePreview / deleteItem 從內部閉包提升至模組頂層作用域\")\n        return scopes\n```\n\n## 🔹 def _extract_wiring_simple(self, text (legacy/uia_code_diff.py: L226~L232)\n```\ndef _extract_wiring_simple(self, text: str) -> List[Dict[str, str]]:\n        wires = []\n        matches = re.findall(r'([a-zA-Z0-9_$.?]+)\\.addEventListener\\([\\'\"]([a-zA-Z0-9_-]+)[\\'\"]\\s*,\\s*([a-zA-Z0-9_$]+)', text)\n        for target, event, handler in matches:\n            if handler not in (\"async\", \"function\"):\n                wires.append({\"target\": target, \"event\": event, \"handler\": handler})\n        return wires\n```\n\n## 🔹 def get_git_diff(self) -> str (legacy/uia_code_diff.py: L21~L27)\n```\ndef get_git_diff(self) -> str:\n        \"\"\"調用 git diff 取得原始差分輸出\"\"\"\n        cmd = [\"git\", \"-C\", self.repo_path, \"diff\", *self.diff_range.split()]\n        res = subprocess.run(cmd, capture_output=True, text=True, encoding=\"utf-8\", errors=\"replace\")\n        if res.returncode != 0:\n            raise RuntimeError(f\"Git diff 執行失敗: {res.stderr}\")\n        return res.stdout\n```\n\n## 🔹 def _extract_keys(self, text (legacy/uia_code_diff.py: L234~L239)\n```\ndef _extract_keys(self, text: str) -> List[str]:\n        keys = set()\n        key_matches = re.findall(r'e\\.key\\s*===?\\s*[\\'\"]([a-zA-Z0-9_-]+)[\\'\"]', text)\n        for k in key_matches:\n            keys.add(k)\n        return list(keys)\n```\n"}];
+    const funcsData = {"func:UIACodeDiffAnalyzer.__init__@legacy/uia_code_diff.py:L17": {"id": "func:UIACodeDiffAnalyzer.__init__@legacy/uia_code_diff.py:L17", "label": "UIACodeDiffAnalyzer.__init__", "raw_label": "UIACodeDiffAnalyzer.__init__", "signature": "def __init__(self, repo_path", "parameters": "(self, repo_path: str, diff_range: str = \"HEAD~1\")", "line_start": 17, "line_end": 19, "line_count": 3, "is_async": false, "source_code": "def __init__(self, repo_path: str, diff_range: str = \"HEAD~1\"):\n        self.repo_path = repo_path\n        self.diff_range = diff_range", "scope_id": "scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11", "class_name": ""}, "func:UIACodeDiffAnalyzer.get_git_diff@legacy/uia_code_diff.py:L21": {"id": "func:UIACodeDiffAnalyzer.get_git_diff@legacy/uia_code_diff.py:L21", "label": "UIACodeDiffAnalyzer.get_git_diff", "raw_label": "UIACodeDiffAnalyzer.get_git_diff", "signature": "def get_git_diff(self) -> str", "parameters": "(self)", "line_start": 21, "line_end": 27, "line_count": 7, "is_async": false, "source_code": "def get_git_diff(self) -> str:\n        \"\"\"調用 git diff 取得原始差分輸出\"\"\"\n        cmd = [\"git\", \"-C\", self.repo_path, \"diff\", *self.diff_range.split()]\n        res = subprocess.run(cmd, capture_output=True, text=True, encoding=\"utf-8\", errors=\"replace\")\n        if res.returncode != 0:\n            raise RuntimeError(f\"Git diff 執行失敗: {res.stderr}\")\n        return res.stdout", "scope_id": "scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11", "class_name": ""}, "func:UIACodeDiffAnalyzer.analyze@legacy/uia_code_diff.py:L29": {"id": "func:UIACodeDiffAnalyzer.analyze@legacy/uia_code_diff.py:L29", "label": "UIACodeDiffAnalyzer.analyze", "raw_label": "UIACodeDiffAnalyzer.analyze", "signature": "def analyze(self) -> Dict[str, Any]", "parameters": "(self)", "line_start": 29, "line_end": 63, "line_count": 35, "is_async": false, "source_code": "def analyze(self) -> Dict[str, Any]:\n        diff_text = self.get_git_diff()\n        if not diff_text.strip():\n            return {\"empty\": True, \"message\": \"無任何 Git 變更\"}\n\n        added_lines = []\n        removed_lines = []\n\n        for line in diff_text.splitlines():\n            if line.startswith(\"+++\") or line.startswith(\"---\"):\n                continue\n            if line.startswith(\"+\"):\n                added_lines.append(line[1:])\n            elif line.startswith(\"-\"):\n                removed_lines.append(line[1:])\n\n        added_text = \"\\n\".join(added_lines)\n        removed_text = \"\\n\".join(removed_lines)\n\n        # 深入 diff 結構解析 Hunk、呼叫作用域與宣告位置\n        hunk_analysis = self._analyze_hunks(diff_text)\n\n        analysis = {\n            \"controls_added\": self._extract_controls(added_text) + hunk_analysis[\"dynamic_controls\"],\n            \"controls_removed\": self._extract_controls(removed_text),\n            \"wires_added\": hunk_analysis[\"wires_added\"],\n            \"wires_removed\": self._extract_wiring_simple(removed_text),\n            \"keys_handled\": self._extract_keys(added_text),\n            \"cleanups\": self._extract_cleanups(added_text),\n            \"scope_changes\": self._extract_scope_changes(diff_text),\n            \"scope_violations\": hunk_analysis[\"scope_violations\"],\n            \"hazards\": hunk_analysis[\"hazards\"],\n            \"files_changed\": self._extract_files(diff_text),\n        }\n        return analysis", "scope_id": "scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11", "class_name": ""}, "func:UIACodeDiffAnalyzer._analyze_hunks@legacy/uia_code_diff.py:L65": {"id": "func:UIACodeDiffAnalyzer._analyze_hunks@legacy/uia_code_diff.py:L65", "label": "UIACodeDiffAnalyzer._analyze_hunks", "raw_label": "UIACodeDiffAnalyzer._analyze_hunks", "signature": "def _analyze_hunks(self, diff_text", "parameters": "(self, diff_text: str)", "line_start": 65, "line_end": 216, "line_count": 152, "is_async": false, "source_code": "def _analyze_hunks(self, diff_text: str) -> Dict[str, Any]:\n        \"\"\"按 Hunk 區塊進行多行語法分析，精確提取事件接線、作用域深度與禁忌 API\"\"\"\n        dynamic_controls = []\n        wires_added = []\n        declared_functions = {}  # name -> {enclosing, indent, is_top_level, file}\n        hazards = []\n        scope_violations = []\n\n        # 1. 將 Diff 切割為檔案與 Hunk 區塊\n        current_file = \"\"\n        current_enclosing = \"module\"\n        hunks = []  # list of {file, enclosing, lines, text}\n        curr_hunk_lines = []\n\n        for line in diff_text.splitlines():\n            if line.startswith(\"diff --git\"):\n                if curr_hunk_lines:\n                    hunks.append({\n                        \"file\": current_file,\n                        \"enclosing\": current_enclosing,\n                        \"lines\": curr_hunk_lines,\n                        \"text\": \"\\n\".join(curr_hunk_lines)\n                    })\n                    curr_hunk_lines = []\n                match = re.search(r'b/(.*)$', line)\n                current_file = match.group(1) if match else \"\"\n                current_enclosing = \"module\"\n                continue\n\n            if line.startswith(\"@@\"):\n                if curr_hunk_lines:\n                    hunks.append({\n                        \"file\": current_file,\n                        \"enclosing\": current_enclosing,\n                        \"lines\": curr_hunk_lines,\n                        \"text\": \"\\n\".join(curr_hunk_lines)\n                    })\n                    curr_hunk_lines = []\n                \n                # 擷取外層函式名稱\n                match = re.search(r'@@\\s+[^@]+@@\\s*(?:(?:async\\s+)?function\\s+)?([a-zA-Z0-9_$]+)', line)\n                if match and match.group(1):\n                    current_enclosing = match.group(1).strip()\n                else:\n                    current_enclosing = \"module\"\n                continue\n\n            if line.startswith(\"+\") and not line.startswith(\"+++\"):\n                curr_hunk_lines.append(line[1:])\n\n        if curr_hunk_lines:\n            hunks.append({\n                \"file\": current_file,\n                \"enclosing\": current_enclosing,\n                \"lines\": curr_hunk_lines,\n                \"text\": \"\\n\".join(curr_hunk_lines)\n            })\n\n        # 2. 遍歷每個 Hunk 進行多行語法匹配\n        for hunk in hunks:\n            h_file = hunk[\"file\"]\n            h_enclosing = hunk[\"enclosing\"]\n            h_text = hunk[\"text\"]\n\n            # (A) 偵測動態建立的 DOM 控制項\n            for elem_match in re.finditer(r'const\\s+([a-zA-Z0-9_$]+)\\s*=\\s*document\\.createElement\\([\\'\"]([a-zA-Z0-9_-]+)[\\'\"]\\)', h_text):\n                var_name, tag = elem_match.groups()\n                ctype = \"Button\" if tag.lower() == \"button\" or \"btn\" in var_name.lower() else \"Element\"\n                dynamic_controls.append({\"tag\": tag, \"id\": var_name, \"type\": f\"Dynamic {ctype} ({var_name})\"})\n\n            # (B) 偵測函式宣告位置與縮排\n            for line in hunk[\"lines\"]:\n                func_decl = re.match(r'^(\\s*)(?:async\\s+)?function\\s+([a-zA-Z0-9_$]+)', line)\n                if func_decl:\n                    indent = len(func_decl.group(1))\n                    func_name = func_decl.group(2)\n                    is_top_level = (indent == 0)\n                    declared_functions[func_name] = {\n                        \"enclosing\": h_enclosing if not is_top_level else \"module\",\n                        \"indent\": indent,\n                        \"is_top_level\": is_top_level,\n                        \"file\": h_file\n                    }\n\n            # (C) 偵測事件監聽接線 (支援多行箭頭函式內部實質業務呼叫)\n            pat_block = r'([a-zA-Z0-9_$.?]+)\\.addEventListener\\(\\s*[\\'\"]([a-zA-Z0-9_-]+)[\\'\"]\\s*,\\s*(?:async\\s*)?(?:\\([^)]*\\)|[a-zA-Z0-9_$]+)\\s*=>\\s*\\{([\\s\\S]*?)\\}\\s*\\)'\n            for m in re.finditer(pat_block, h_text):\n                target, event, body = m.groups()\n                calls = re.findall(r'(?:await\\s+)?([a-zA-Z0-9_$]+)\\(', body)\n                meaningful = [c for c in calls if c not in ('stopPropagation', 'preventDefault', 'setTimeout', 'showToast', 'if', 'Boolean')]\n                for handler in meaningful:\n                    wires_added.append({\n                        \"target\": target,\n                        \"event\": event,\n                        \"handler\": handler,\n                        \"caller_scope\": h_enclosing,\n                        \"file\": h_file\n                    })\n\n            direct_matches = re.finditer(\n                r'([a-zA-Z0-9_$.?]+)\\.addEventListener\\(\\s*[\\'\"]([a-zA-Z0-9_-]+)[\\'\"]\\s*,\\s*([a-zA-Z0-9_$]+)\\s*\\)',\n                h_text\n            )\n            for m in direct_matches:\n                target, event, handler = m.groups()\n                if handler not in (\"async\", \"function\"):\n                    wires_added.append({\n                        \"target\": target,\n                        \"event\": event,\n                        \"handler\": handler,\n                        \"caller_scope\": h_enclosing,\n                        \"file\": h_file\n                    })\n\n            # (D) 偵測 Webview 禁忌阻塞 API\n            if \"window.confirm\" in h_text:\n                hazards.append({\n                    \"type\": \"BLOCKING_DIALOG\",\n                    \"api\": \"window.confirm()\",\n                    \"file\": h_file,\n                    \"risk\": \"在 Webview / Extension 中會直接凍結 UI 執行緒或被 Chromium 靜音吞掉！\"\n                })\n            if \"window.alert\" in h_text:\n                hazards.append({\n                    \"type\": \"BLOCKING_DIALOG\",\n                    \"api\": \"window.alert()\",\n                    \"file\": h_file,\n                    \"risk\": \"在 Webview / Extension 中會直接凍結 UI 執行緒！\"\n                })\n\n        # 3. 作用域可達性校驗 (Scope Reachability Check)\n        for w in wires_added:\n            handler = w[\"handler\"]\n            caller_scope = w.get(\"caller_scope\", \"module\")\n            if handler in declared_functions:\n                decl = declared_functions[handler]\n                # 若函式被鎖在某個內部閉包中 (非 module 頂層)，且與呼叫者作用域不同\n                if not decl[\"is_top_level\"] and decl[\"enclosing\"] != caller_scope:\n                    scope_violations.append({\n                        \"handler\": handler,\n                        \"declared_in\": decl[\"enclosing\"],\n                        \"caller_scope\": caller_scope,\n                        \"file\": w[\"file\"],\n                        \"issue\": f\"函式 `{handler}` 被深鎖在 `{decl['enclosing']}` 內部閉包中，但卻在 `{caller_scope}` 嘗試調用，執行期將直接崩潰拋出 ReferenceError: {handler} is not defined！\"\n                    })\n\n        return {\n            \"dynamic_controls\": dynamic_controls,\n            \"wires_added\": wires_added,\n            \"hazards\": hazards,\n            \"scope_violations\": scope_violations\n        }", "scope_id": "scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11", "class_name": ""}, "func:UIACodeDiffAnalyzer._extract_controls@legacy/uia_code_diff.py:L218": {"id": "func:UIACodeDiffAnalyzer._extract_controls@legacy/uia_code_diff.py:L218", "label": "UIACodeDiffAnalyzer._extract_controls", "raw_label": "UIACodeDiffAnalyzer._extract_controls", "signature": "def _extract_controls(self, text", "parameters": "(self, text: str)", "line_start": 218, "line_end": 224, "line_count": 7, "is_async": false, "source_code": "def _extract_controls(self, text: str) -> List[Dict[str, str]]:\n        controls = []\n        id_matches = re.findall(r'<([a-zA-Z0-9_-]+)[^>]*\\bid=[\"\\']([^\"\\']+)[\"\\']', text)\n        for tag, cid in id_matches:\n            ctype = \"Button\" if \"btn\" in cid.lower() or tag == \"button\" else (\"Modal/Pane\" if \"modal\" in cid.lower() else \"Element\")\n            controls.append({\"tag\": tag, \"id\": cid, \"type\": ctype})\n        return controls", "scope_id": "scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11", "class_name": ""}, "func:UIACodeDiffAnalyzer._extract_wiring_simple@legacy/uia_code_diff.py:L226": {"id": "func:UIACodeDiffAnalyzer._extract_wiring_simple@legacy/uia_code_diff.py:L226", "label": "UIACodeDiffAnalyzer._extract_wiring_simple", "raw_label": "UIACodeDiffAnalyzer._extract_wiring_simple", "signature": "def _extract_wiring_simple(self, text", "parameters": "(self, text: str)", "line_start": 226, "line_end": 232, "line_count": 7, "is_async": false, "source_code": "def _extract_wiring_simple(self, text: str) -> List[Dict[str, str]]:\n        wires = []\n        matches = re.findall(r'([a-zA-Z0-9_$.?]+)\\.addEventListener\\([\\'\"]([a-zA-Z0-9_-]+)[\\'\"]\\s*,\\s*([a-zA-Z0-9_$]+)', text)\n        for target, event, handler in matches:\n            if handler not in (\"async\", \"function\"):\n                wires.append({\"target\": target, \"event\": event, \"handler\": handler})\n        return wires", "scope_id": "scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11", "class_name": ""}, "func:UIACodeDiffAnalyzer._extract_keys@legacy/uia_code_diff.py:L234": {"id": "func:UIACodeDiffAnalyzer._extract_keys@legacy/uia_code_diff.py:L234", "label": "UIACodeDiffAnalyzer._extract_keys", "raw_label": "UIACodeDiffAnalyzer._extract_keys", "signature": "def _extract_keys(self, text", "parameters": "(self, text: str)", "line_start": 234, "line_end": 239, "line_count": 6, "is_async": false, "source_code": "def _extract_keys(self, text: str) -> List[str]:\n        keys = set()\n        key_matches = re.findall(r'e\\.key\\s*===?\\s*[\\'\"]([a-zA-Z0-9_-]+)[\\'\"]', text)\n        for k in key_matches:\n            keys.add(k)\n        return list(keys)", "scope_id": "scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11", "class_name": ""}, "func:UIACodeDiffAnalyzer._extract_cleanups@legacy/uia_code_diff.py:L241": {"id": "func:UIACodeDiffAnalyzer._extract_cleanups@legacy/uia_code_diff.py:L241", "label": "UIACodeDiffAnalyzer._extract_cleanups", "raw_label": "UIACodeDiffAnalyzer._extract_cleanups", "signature": "def _extract_cleanups(self, text", "parameters": "(self, text: str)", "line_start": 241, "line_end": 247, "line_count": 7, "is_async": false, "source_code": "def _extract_cleanups(self, text: str) -> List[str]:\n        cleanups = []\n        if \"removeEventListener\" in text:\n            cleanups.append(\"removeEventListener (清理事件監聽器)\")\n        if re.search(r'\\bcleanup\\s*\\(', text):\n            cleanups.append(\"cleanup() (定義清理函式)\")\n        return cleanups", "scope_id": "scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11", "class_name": ""}, "func:UIACodeDiffAnalyzer._extract_scope_changes@legacy/uia_code_diff.py:L249": {"id": "func:UIACodeDiffAnalyzer._extract_scope_changes@legacy/uia_code_diff.py:L249", "label": "UIACodeDiffAnalyzer._extract_scope_changes", "raw_label": "UIACodeDiffAnalyzer._extract_scope_changes", "signature": "def _extract_scope_changes(self, diff_text", "parameters": "(self, diff_text: str)", "line_start": 249, "line_end": 254, "line_count": 6, "is_async": false, "source_code": "def _extract_scope_changes(self, diff_text: str) -> List[str]:\n        scopes = []\n        if re.search(r'-\\s*async\\s+function\\s+init\\b', diff_text) or re.search(r'-\\s*function\\s+closePreview\\b', diff_text):\n            if re.search(r'\\+\\s*function\\s+closePreview\\b', diff_text):\n                scopes.append(\"closePreview / deleteItem 從內部閉包提升至模組頂層作用域\")\n        return scopes", "scope_id": "scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11", "class_name": ""}, "func:UIACodeDiffAnalyzer._extract_files@legacy/uia_code_diff.py:L256": {"id": "func:UIACodeDiffAnalyzer._extract_files@legacy/uia_code_diff.py:L256", "label": "UIACodeDiffAnalyzer._extract_files", "raw_label": "UIACodeDiffAnalyzer._extract_files", "signature": "def _extract_files(self, diff_text", "parameters": "(self, diff_text: str)", "line_start": 256, "line_end": 257, "line_count": 2, "is_async": false, "source_code": "def _extract_files(self, diff_text: str) -> List[str]:\n        return re.findall(r'diff --git a/(.*?) b/', diff_text)", "scope_id": "scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11", "class_name": ""}, "func:UIACodeDiffAnalyzer.render_markdown_report@legacy/uia_code_diff.py:L259": {"id": "func:UIACodeDiffAnalyzer.render_markdown_report@legacy/uia_code_diff.py:L259", "label": "UIACodeDiffAnalyzer.render_markdown_report", "raw_label": "UIACodeDiffAnalyzer.render_markdown_report", "signature": "def render_markdown_report(self, analysis", "parameters": "(self, analysis: Dict[str, Any])", "line_start": 259, "line_end": 333, "line_count": 75, "is_async": false, "source_code": "def render_markdown_report(self, analysis: Dict[str, Any]) -> str:\n        if analysis.get(\"empty\"):\n            return \"### ⚠️ 目前版本無任何代碼差異。\"\n\n        md = []\n        md.append(\"## 🔍 UIA 語意樹代碼變更驗收報告 (UIA Semantic Code Diff)\")\n        md.append(f\"> **比對範圍**：`{self.diff_range}`  \")\n        md.append(f\"> **影響檔案**：`{', '.join(analysis['files_changed'])}`\\n\")\n\n        # 1. Mermaid UIA 樹狀圖\n        md.append(\"### 1. 🌲 UIA 控制項樹結構演進 (Visual Tree)\")\n        md.append(\"```mermaid\")\n        md.append(\"flowchart TD\")\n        md.append('    Root[\"Root Window / DOM Tree\"]')\n\n        added_ctrls = analysis[\"controls_added\"]\n        if added_ctrls:\n            md.append('    Root ==>|\"➕ 新增控制項子樹\"| SubTree[\"新增 UIA 元件群\"]')\n            for c in added_ctrls:\n                node_id = re.sub(r'[^a-zA-Z0-9_]', '_', c[\"id\"])\n                md.append(f'    SubTree --> {node_id}[\"{c[\"type\"]}: #{c[\"id\"]}\"]')\n        else:\n            md.append('    Root --> Stable[\"控制項樹結構無新增節點 (純邏輯變更)\"]')\n        md.append(\"```\\n\")\n\n        # 2. 語意差分驗收表格\n        md.append(\"### 2. 📋 語意驗收差分清單 (Semantic Invariant Table)\")\n        md.append(\"| 類型 | 標籤 | 項目 | 語意說明與安全性評估 |\")\n        md.append(\"| :--- | :--- | :--- | :--- |\")\n\n        for c in analysis[\"controls_added\"]:\n            md.append(f\"| **控制項** | `[+] CONTROL` | `#{c['id']}` ({c['type']}) | 介面長出新控制項節點。 |\")\n\n        for w in analysis[\"wires_added\"]:\n            md.append(f\"| **接線** | `[+] WIRED` | `{w['target']} -> on('{w['event']}')` | 銜接至目標函式 `{w['handler']}`（觸發於 `{w.get('caller_scope', 'module')}`）。 |\")\n\n        if analysis[\"keys_handled\"]:\n            keys_str = \", \".join([f\"`{k}`\" for k in analysis[\"keys_handled\"]])\n            md.append(f\"| **快速鍵** | `[+] SHORTCUT` | {keys_str} | 支援無障礙鍵盤導航操作。 |\")\n\n        for cl in analysis[\"cleanups\"]:\n            md.append(f\"| **生命週期** | `[-] LEAK_GUARD` | `{cl}` | **防洩漏守衛**：具備銷毀清理機制，防止監聽器重複堆疊。 |\")\n\n        for sc in analysis[\"scope_changes\"]:\n            md.append(f\"| **作用域提升** | `[*] SCOPE_FIX` | `{sc}` | 解決閉包作用域隱蔽問題，開放全域調用。 |\")\n\n        for sv in analysis.get(\"scope_violations\", []):\n            md.append(f\"| **作用域違規** | `[!] SCOPE_ERROR` | `{sv['handler']}` | 💥 **{sv['issue']}** |\")\n\n        for hz in analysis.get(\"hazards\", []):\n            md.append(f\"| **禁忌 API** | `[!] HAZARD` | `{hz['api']}` | ⚠️ **{hz['risk']}** |\")\n\n        md.append(\"\\n### 3. 🛡️ 品質閘道判定 (Quality Gate Verdict)\")\n        has_violations = len(analysis.get(\"scope_violations\", [])) > 0\n        has_hazards = len(analysis.get(\"hazards\", [])) > 0\n        has_wires = len(analysis[\"wires_added\"]) > 0\n        has_controls = len(analysis[\"controls_added\"]) > 0\n        has_cleanups = len(analysis[\"cleanups\"]) > 0\n\n        if has_violations or has_hazards:\n            md.append(\"> 🔴 **品質閘道阻擋 (BLOCKED_BY_INVARIANTS)**：\")\n            if has_violations:\n                for sv in analysis[\"scope_violations\"]:\n                    md.append(f\"> - ❌ **作用域致命錯誤**：{sv['issue']}\")\n            if has_hazards:\n                for hz in analysis[\"hazards\"]:\n                    md.append(f\"> - ⚠️ **禁忌阻塞 API**：偵測到 `{hz['api']}`，{hz['risk']}\")\n        elif has_controls and not has_wires:\n            md.append(\"> ⚠️ **警告 (UNWIRED_RISK)**：長出了新控制項，但未偵測到事件監聽器接線！請確認是否有電線未插。\")\n        elif has_controls and has_wires and has_cleanups:\n            md.append(\"> 🟢 **驗收通過 (READY_TO_SHIP)**：控制項結構完整、電線通電驗證無誤、閉包作用域安全、且自帶銷毀清理守門員！\")\n        else:\n            md.append(\"> 🟢 **邏輯更新完成**：代碼已更新，無控制項孤兒或作用域異常風險。\")\n\n        return \"\\n\".join(md)", "scope_id": "scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11", "class_name": ""}, "func:UIACodeDiffAnalyzer.render_html_dashboard@legacy/uia_code_diff.py:L335": {"id": "func:UIACodeDiffAnalyzer.render_html_dashboard@legacy/uia_code_diff.py:L335", "label": "UIACodeDiffAnalyzer.render_html_dashboard", "raw_label": "UIACodeDiffAnalyzer.render_html_dashboard", "signature": "def render_html_dashboard(self, analysis", "parameters": "(self, analysis: Dict[str, Any], output_path: str)", "line_start": 335, "line_end": 565, "line_count": 231, "is_async": false, "source_code": "def render_html_dashboard(self, analysis: Dict[str, Any], output_path: str):\n        \"\"\"生成 100% 自包含的現代化 UIA 語意差分視覺化儀表板 HTML\"\"\"\n        ctrl_nodes = \"\"\n        for c in analysis.get(\"controls_added\", []):\n            ctrl_nodes += f\"\"\"\n            <div class=\"node-pill node-added\">\n                <span class=\"node-tag\">[+] {c['type']}</span>\n                <span class=\"node-name\">#{c['id']}</span>\n            </div>\n            \"\"\"\n\n        wire_rows = \"\"\n        for w in analysis.get(\"wires_added\", []):\n            caller = w.get(\"caller_scope\", \"module\")\n            wire_rows += f\"\"\"\n            <tr>\n                <td><span class=\"badge badge-wire\">⚡ WIRED</span></td>\n                <td><code>{w['target']}</code></td>\n                <td><code>on('{w['event']}')</code></td>\n                <td><code>{w['handler']}</code> (scope: {caller})</td>\n                <td><span class=\"status-ok\">🟢 已接線</span></td>\n            </tr>\n            \"\"\"\n\n        leak_items = \"\".join([f\"<li>🛡️ {l}</li>\" for l in analysis.get(\"cleanups\", [])]) or \"<li>無新增清理函式</li>\"\n        keys_badges = \" \".join([f\"<span class='badge badge-key'>{k}</span>\" for k in analysis.get(\"keys_handled\", [])]) or \"無\"\n\n        # 作用域違規與禁忌 API 警示區塊\n        has_violations = len(analysis.get(\"scope_violations\", [])) > 0\n        has_hazards = len(analysis.get(\"hazards\", [])) > 0\n        \n        alerts_html = \"\"\n        if has_violations or has_hazards:\n            alerts_html += \"\"\"<div class=\"alerts-container\">\"\"\"\n            for sv in analysis.get(\"scope_violations\", []):\n                alerts_html += f\"\"\"\n                <div class=\"alert-box alert-danger\">\n                    <span class=\"alert-icon\">💥</span>\n                    <div>\n                        <strong>[!] 作用域致命囚禁 (Scope Trap):</strong>\n                        <p>{sv['issue']}</p>\n                    </div>\n                </div>\n                \"\"\"\n            for hz in analysis.get(\"hazards\", []):\n                alerts_html += f\"\"\"\n                <div class=\"alert-box alert-warning\">\n                    <span class=\"alert-icon\">⚠️</span>\n                    <div>\n                        <strong>[!] Webview 禁忌阻塞 API ({hz['api']}):</strong>\n                        <p>{hz['risk']}</p>\n                    </div>\n                </div>\n                \"\"\"\n            alerts_html += \"\"\"</div>\"\"\"\n\n        if has_violations or has_hazards:\n            verdict_class = \"verdict-blocked\"\n            verdict_icon = \"🔴\"\n            verdict_text = \"【UIA 品質閘道阻擋】：發布被拒絕 (BLOCKED BY INVARIANTS) —— 偵測到深層閉包作用域囚禁或禁忌阻塞 API，上線必翻車！\"\n        elif len(analysis.get(\"controls_added\", [])) > 0 and len(analysis.get(\"wires_added\", [])) == 0:\n            verdict_class = \"verdict-warning\"\n            verdict_icon = \"⚠️\"\n            verdict_text = \"【UIA 品質閘道警告】：發現孤兒控制項 (UNWIRED_RISK) —— 介面長出元件但電線未通！\"\n        else:\n            verdict_class = \"verdict-ok\"\n            verdict_icon = \"🟢\"\n            verdict_text = \"【UIA 品質閘道判定】：驗收通過 (READY TO SHIP) —— 控制項結構完整、電線通電驗證無誤、作用域安全！\"\n\n        html_content = f\"\"\"<!DOCTYPE html>\n<html lang=\"zh-TW\">\n<head>\n    <meta charset=\"UTF-8\">\n    <title>UIA Semantic Diff Dashboard</title>\n    <style>\n        :root {{\n            --bg: #1e1e2e;\n            --card: #252538;\n            --border: #3b3b54;\n            --text: #cdd6f4;\n            --green: #a6e3a1;\n            --blue: #89b4fa;\n            --yellow: #f9e2af;\n            --red: #f38ba8;\n        }}\n        * {{ box-sizing: border-box; margin: 0; padding: 0; }}\n        body {{\n            background: var(--bg);\n            color: var(--text);\n            font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif;\n            padding: 24px;\n            line-height: 1.5;\n        }}\n        .header {{ margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }}\n        .header h1 {{ font-size: 20px; color: #fff; display: flex; align-items: center; gap: 10px; }}\n        .badge {{ font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }}\n        .badge-range {{ background: #313244; color: var(--blue); border: 1px solid var(--border); }}\n        .badge-wire {{ background: rgba(166, 227, 161, 0.2); color: var(--green); }}\n        .badge-key {{ background: rgba(249, 226, 175, 0.2); color: var(--yellow); }}\n        \n        .alerts-container {{ margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; }}\n        .alert-box {{\n            padding: 14px 18px;\n            border-radius: 8px;\n            display: flex;\n            align-items: flex-start;\n            gap: 12px;\n            font-size: 13px;\n        }}\n        .alert-danger {{ background: rgba(243, 139, 168, 0.15); border: 1px solid var(--red); color: var(--red); }}\n        .alert-warning {{ background: rgba(249, 226, 175, 0.15); border: 1px solid var(--yellow); color: var(--yellow); }}\n        .alert-icon {{ font-size: 20px; }}\n        \n        .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }}\n        @media(max-width: 800px) {{ .grid {{ grid-template-columns: 1fr; }} }}\n        \n        .card {{\n            background: var(--card);\n            border: 1px solid var(--border);\n            border-radius: 8px;\n            padding: 16px;\n        }}\n        .card-title {{ font-size: 14px; font-weight: 700; margin-bottom: 12px; color: #fff; display: flex; justify-content: space-between; }}\n        \n        .node-container {{ display: flex; flex-direction: column; gap: 8px; }}\n        .node-pill {{\n            background: #181825;\n            border: 1px solid var(--border);\n            border-left: 4px solid var(--green);\n            padding: 8px 12px;\n            border-radius: 6px;\n            display: flex;\n            align-items: center;\n            justify-content: space-between;\n            font-size: 13px;\n        }}\n        .node-tag {{ font-family: monospace; font-weight: bold; color: var(--green); }}\n        .node-name {{ font-family: monospace; color: #bac2de; }}\n        \n        table {{ width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left; }}\n        th, td {{ padding: 8px 10px; border-bottom: 1px solid var(--border); }}\n        th {{ color: #a6adc8; font-size: 11px; text-transform: uppercase; }}\n        .status-ok {{ color: var(--green); font-weight: 600; }}\n        \n        .verdict-box {{\n            border-radius: 8px;\n            padding: 14px 18px;\n            display: flex;\n            align-items: center;\n            gap: 12px;\n            font-weight: 600;\n            font-size: 14px;\n        }}\n        .verdict-ok {{ background: rgba(166, 227, 161, 0.1); border: 1px solid var(--green); color: var(--green); }}\n        .verdict-blocked {{ background: rgba(243, 139, 168, 0.15); border: 1px solid var(--red); color: var(--red); }}\n        .verdict-warning {{ background: rgba(249, 226, 175, 0.15); border: 1px solid var(--yellow); color: var(--yellow); }}\n    </style>\n</head>\n<body>\n    <div class=\"header\">\n        <h1>\n            <span>🌲 UIA 語意樹代碼差分儀表板</span>\n            <span class=\"badge badge-range\">Range: {self.diff_range}</span>\n        </h1>\n        <p style=\"color:#a6adc8; font-size:13px; margin-top:4px;\">\n            Target Repository: <code>{self.repo_path}</code>\n        </p>\n    </div>\n\n    {alerts_html}\n\n    <div class=\"grid\">\n        <!-- Controls Subtree -->\n        <div class=\"card\">\n            <div class=\"card-title\">\n                <span>➕ 新增 UIA 控制項節點 (Controls Subtree)</span>\n                <span style=\"color:var(--green); font-size:12px;\">{len(analysis.get(\"controls_added\", []))} Nodes</span>\n            </div>\n            <div class=\"node-container\">\n                {ctrl_nodes or '<div style=\"color:#6c7086; font-size:13px;\">無新增控制項</div>'}\n            </div>\n        </div>\n\n        <!-- Invariants & Lifecycle -->\n        <div class=\"card\">\n            <div class=\"card-title\">\n                <span>🛡️ 鍵盤快速鍵與生命週期守衛</span>\n            </div>\n            <div style=\"font-size:13px; margin-bottom:12px;\">\n                <span style=\"color:#a6adc8;\">捕獲快速鍵：</span> {keys_badges}\n            </div>\n            <div style=\"font-size:13px;\">\n                <span style=\"color:#a6adc8; display:block; margin-bottom:6px;\">銷毀守衛 (Anti-Memory Leak)：</span>\n                <ul style=\"padding-left:18px; color:var(--green); font-size:12px;\">\n                    {leak_items}\n                </ul>\n            </div>\n        </div>\n    </div>\n\n    <!-- Wiring Table -->\n    <div class=\"card\" style=\"margin-bottom:20px;\">\n        <div class=\"card-title\">\n            <span>⚡ 電線通電檢查 (Event Wiring Check)</span>\n        </div>\n        <table>\n            <thead>\n                <tr>\n                    <th>標籤</th>\n                    <th>觸發對象 (Target)</th>\n                    <th>事件類型 (Event)</th>\n                    <th>銜接函式 (Handler)</th>\n                    <th>通電狀態</th>\n                </tr>\n            </thead>\n            <tbody>\n                {wire_rows or '<tr><td colspan=\"5\" style=\"color:#6c7086; text-align:center;\">無直接 addEventListener 變更</td></tr>'}\n            </tbody>\n        </table>\n    </div>\n\n    <!-- Quality Gate Verdict -->\n    <div class=\"verdict-box {verdict_class}\">\n        <span style=\"font-size:20px;\">{verdict_icon}</span>\n        <span>{verdict_text}</span>\n    </div>\n</body>\n</html>\n\"\"\"\n        with open(output_path, \"w\", encoding=\"utf-8\") as f:\n            f.write(html_content)", "scope_id": "scope:UIACodeDiffAnalyzer@legacy/uia_code_diff.py:L11", "class_name": ""}, "func:main@legacy/uia_code_diff.py:L568": {"id": "func:main@legacy/uia_code_diff.py:L568", "label": "main", "raw_label": "main", "signature": "def main()", "parameters": "()", "line_start": 568, "line_end": 582, "line_count": 15, "is_async": false, "source_code": "def main():\n    parser = argparse.ArgumentParser(description=\"UIA Style Semantic Code Diff Analyzer\")\n    parser.add_argument(\"--repo\", default=\".\", help=\"目標 Git 倉庫目錄路徑\")\n    parser.add_argument(\"--diff\", default=\"HEAD~1\", help=\"Git diff 比對範圍 (例如: HEAD~1, 或 commitA commitB)\")\n    parser.add_argument(\"--html\", default=None, help=\"輸出 HTML 視覺化儀表板檔案路徑\")\n    args = parser.parse_args()\n\n    analyzer = UIACodeDiffAnalyzer(repo_path=args.repo, diff_range=args.diff)\n    analysis = analyzer.analyze()\n    report = analyzer.render_markdown_report(analysis)\n    print(report)\n\n    if args.html:\n        analyzer.render_html_dashboard(analysis, args.html)\n        print(f\"\\n[HTML 儀表板已輸出至]: {args.html}\")", "scope_id": "scope:global", "class_name": ""}, "func:hasattr@external": {"id": "func:hasattr@external", "label": "hasattr (External/Unresolved)", "raw_label": "hasattr (External/Unresolved)", "signature": "hasattr (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:reconfigure@external": {"id": "func:reconfigure@external", "label": "reconfigure (External/Unresolved)", "raw_label": "reconfigure (External/Unresolved)", "signature": "reconfigure (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:run@external": {"id": "func:run@external", "label": "run (External/Unresolved)", "raw_label": "run (External/Unresolved)", "signature": "run (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:RuntimeError@external": {"id": "func:RuntimeError@external", "label": "RuntimeError (External/Unresolved)", "raw_label": "RuntimeError (External/Unresolved)", "signature": "RuntimeError (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:splitlines@external": {"id": "func:splitlines@external", "label": "splitlines (External/Unresolved)", "raw_label": "splitlines (External/Unresolved)", "signature": "splitlines (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:search@external": {"id": "func:search@external", "label": "search (External/Unresolved)", "raw_label": "search (External/Unresolved)", "signature": "search (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:group@external": {"id": "func:group@external", "label": "group (External/Unresolved)", "raw_label": "group (External/Unresolved)", "signature": "group (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:finditer@external": {"id": "func:finditer@external", "label": "finditer (External/Unresolved)", "raw_label": "finditer (External/Unresolved)", "signature": "finditer (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:groups@external": {"id": "func:groups@external", "label": "groups (External/Unresolved)", "raw_label": "groups (External/Unresolved)", "signature": "groups (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:lower@external": {"id": "func:lower@external", "label": "lower (External/Unresolved)", "raw_label": "lower (External/Unresolved)", "signature": "lower (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:match@external": {"id": "func:match@external", "label": "match (External/Unresolved)", "raw_label": "match (External/Unresolved)", "signature": "match (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:findall@external": {"id": "func:findall@external", "label": "findall (External/Unresolved)", "raw_label": "findall (External/Unresolved)", "signature": "findall (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:set@external": {"id": "func:set@external", "label": "set (External/Unresolved)", "raw_label": "set (External/Unresolved)", "signature": "set (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:add@external": {"id": "func:add@external", "label": "add (External/Unresolved)", "raw_label": "add (External/Unresolved)", "signature": "add (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:list@external": {"id": "func:list@external", "label": "list (External/Unresolved)", "raw_label": "list (External/Unresolved)", "signature": "list (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:sub@external": {"id": "func:sub@external", "label": "sub (External/Unresolved)", "raw_label": "sub (External/Unresolved)", "signature": "sub (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:open@external": {"id": "func:open@external", "label": "open (External/Unresolved)", "raw_label": "open (External/Unresolved)", "signature": "open (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:ArgumentParser@external": {"id": "func:ArgumentParser@external", "label": "ArgumentParser (External/Unresolved)", "raw_label": "ArgumentParser (External/Unresolved)", "signature": "ArgumentParser (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:add_argument@external": {"id": "func:add_argument@external", "label": "add_argument (External/Unresolved)", "raw_label": "add_argument (External/Unresolved)", "signature": "add_argument (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:parse_args@external": {"id": "func:parse_args@external", "label": "parse_args (External/Unresolved)", "raw_label": "parse_args (External/Unresolved)", "signature": "parse_args (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}};
+
+    let currentSourceCode = "";
+
+    function renderTree() {
+      const root = document.getElementById('treeRoot');
+      root.innerHTML = '';
+
+      uiData.forEach((item, idx) => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'tree-item';
+        itemEl.dataset.label = item.label.toLowerCase();
+        itemEl.id = 'anchor-' + idx;
+
+        const row = document.createElement('div');
+        row.className = 'node-row';
+        row.id = 'row-anchor-' + idx;
+
+        const arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        arrow.textContent = (item.tree.children && item.tree.children.length > 0) ? '▼' : '';
+        row.appendChild(arrow);
+
+        const ctrlTag = document.createElement('span');
+        ctrlTag.className = (item.ui_type === 'Button' || item.ui_type === 'CLI Entry') ? 'tag-btn' : 'tag-ctrl';
+        ctrlTag.textContent = item.label;
+        row.appendChild(ctrlTag);
+
+        const typeTag = document.createElement('span');
+        typeTag.className = 'tag-type';
+        typeTag.textContent = item.ui_type + ' @ L' + item.line;
+        row.appendChild(typeTag);
+
+        // 整包因果代碼 (Bundle) 按鈕
+        if (item.bundle_count > 0) {
+          const bundleBtn = document.createElement('button');
+          bundleBtn.className = 'btn-bundle-code';
+          bundleBtn.textContent = '📦 關聯 ' + item.bundle_count + ' 函式代碼包';
+          bundleBtn.title = '查看該錨點觸發的所有函式原始碼集合';
+          bundleBtn.onclick = (e) => {
+            e.stopPropagation();
+            showBundle(item, row);
+          };
+          row.appendChild(bundleBtn);
+        }
+
+        // 若錨點本身就是函式且具備源碼，渲染查看按鈕
+        if (funcsData[item.anchor_id]) {
+          const inspectBtn = document.createElement('button');
+          inspectBtn.className = 'btn-action-code';
+          inspectBtn.innerHTML = '💻 查看原始碼';
+          inspectBtn.onclick = (e) => {
+            e.stopPropagation();
+            inspectFunction(item.anchor_id, row);
+          };
+          row.appendChild(inspectBtn);
+        }
+
+        row.onclick = (e) => {
+          if (e.target.tagName !== 'BUTTON') {
+            toggleCollapse(itemEl);
+            if (item.bundle_count > 0) showBundle(item, row);
+            else if (funcsData[item.anchor_id]) inspectFunction(item.anchor_id, row);
+          }
+        };
+
+        itemEl.appendChild(row);
+
+        const subTree = document.createElement('div');
+        subTree.className = 'sub-tree';
+        renderChildren(item.tree.children, subTree);
+        itemEl.appendChild(subTree);
+
+        root.appendChild(itemEl);
+      });
+    }
+
+    function renderChildren(children, parentEl) {
+      if (!children || children.length === 0) return;
+
+      children.forEach(c => {
+        const wrap = document.createElement('div');
+        wrap.className = 'tree-item';
+
+        const row = document.createElement('div');
+        row.className = 'node-row';
+
+        const arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        arrow.textContent = (c.children && c.children.length > 0) ? '▼' : '';
+        row.appendChild(arrow);
+
+        if (c.children && c.children.length > 0) {
+          row.onclick = (e) => {
+            if (e.target.tagName !== 'BUTTON') toggleCollapse(wrap);
+          };
+        }
+
+        if (c.is_await) {
+          const awaitTag = document.createElement('span');
+          awaitTag.className = 'tag-await';
+          awaitTag.textContent = '⏳ await';
+          row.appendChild(awaitTag);
+        }
+
+        if (c.edge_status === 'BLOCKED_SCOPE') {
+          const blockedTag = document.createElement('span');
+          blockedTag.className = 'tag-blocked';
+          blockedTag.textContent = '💥 BLOCKED';
+          row.appendChild(blockedTag);
+        }
+
+        const nameTag = document.createElement('span');
+        if (c.category === 'EVENT_BINDING') {
+          nameTag.className = 'tag-event';
+          nameTag.textContent = '⚡ ' + c.label;
+        } else if (c.category === 'FUNCTION_DEF') {
+          nameTag.className = 'tag-func';
+          nameTag.textContent = '🔒 ' + c.label + '()';
+          row.onclick = (e) => {
+            if (e.target.tagName !== 'BUTTON') {
+              if (c.has_code) inspectFunction(c.id, row);
+              if (c.children && c.children.length > 0) toggleCollapse(wrap);
+            }
+          };
+        } else {
+          nameTag.textContent = c.label;
+        }
+        row.appendChild(nameTag);
+
+        // 如果是函式節點且具備代碼，渲染查看原始碼按鈕
+        if (c.has_code) {
+          const inspectBtn = document.createElement('button');
+          inspectBtn.className = 'btn-action-code';
+          inspectBtn.innerHTML = '💻 查看原始碼';
+          inspectBtn.onclick = (e) => {
+            e.stopPropagation();
+            inspectFunction(c.id, row);
+          };
+          row.appendChild(inspectBtn);
+        }
+
+        wrap.appendChild(row);
+
+        if (c.children && c.children.length > 0) {
+          const sub = document.createElement('div');
+          sub.className = 'sub-tree';
+          renderChildren(c.children, sub);
+          wrap.appendChild(sub);
+        }
+
+        parentEl.appendChild(wrap);
+      });
+    }
+
+    function toggleCollapse(el) {
+      el.classList.toggle('collapsed');
+    }
+
+    function inspectFunction(funcId, rowEl) {
+      document.querySelectorAll('.node-row').forEach(r => r.classList.remove('active'));
+      if (rowEl) rowEl.classList.add('active');
+
+      const meta = funcsData[funcId];
+      if (!meta) return;
+
+      currentSourceCode = meta.source_code;
+      document.getElementById('panelTitle').textContent = '💻 函式實作: ' + meta.label + '()';
+      document.getElementById('copyCodeBtn').style.display = 'block';
+
+      const panel = document.getElementById('inspectorContent');
+      panel.innerHTML = `
+        <div class="code-meta">
+          <div><strong>函式簽章:</strong> <span style="color:var(--primary)">${escapeHtml(meta.signature)}</span></div>
+          <div><strong>精確範圍:</strong> L${meta.line_start} ~ L${meta.line_end} (共 ${meta.line_count} 行)</div>
+          <div><strong>執行型別:</strong> ${meta.is_async ? '⚡ async function (非同步 Promise)' : '同步一般函式'}</div>
+          <div><strong>作用空間:</strong> ${escapeHtml(meta.scope_id)}</div>
+        </div>
+        <div class="code-box">${escapeHtml(meta.source_code)}</div>
+      `;
+    }
+
+    function showBundle(item, rowEl) {
+      document.querySelectorAll('.node-row').forEach(r => r.classList.remove('active'));
+      if (rowEl) rowEl.classList.add('active');
+
+      currentSourceCode = item.bundle_text;
+      document.getElementById('panelTitle').textContent = '📦 ' + item.label + ' 因果代碼包 (共 ' + item.bundle_count + ' 函式)';
+      document.getElementById('copyCodeBtn').style.display = 'block';
+
+      const panel = document.getElementById('inspectorContent');
+      panel.innerHTML = `
+        <div class="code-meta">
+          <div><strong>錨點/入口:</strong> <span style="color:var(--primary)">${escapeHtml(item.label)} (${escapeHtml(item.ui_type)})</span></div>
+          <div><strong>關聯函式:</strong> 共 ${item.bundle_count} 個呼叫實作函式已由 NetworkX 打包</div>
+        </div>
+        <div class="code-box">${escapeHtml(item.bundle_text)}</div>
+      `;
+    }
+
+    function copyCode() {
+      if (currentSourceCode) {
+        navigator.clipboard.writeText(currentSourceCode);
+        const btn = document.getElementById('copyCodeBtn');
+        const orig = btn.textContent;
+        btn.textContent = '✅ 已複製！';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      }
+    }
+
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function filterTree() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      document.querySelectorAll('#treeRoot > .tree-item').forEach(el => {
+        const text = el.textContent.toLowerCase();
+        if (!query || text.includes(query)) {
+          el.style.display = 'block';
+        } else {
+          el.style.display = 'none';
+        }
+      });
+    }
+
+    // 初始化渲染
+    renderTree();
+
+    // 預設高亮第一個錨點或優先選擇核心函式
+    if (uiData.length > 0) {
+      let defaultIdx = 0;
+      const targetIdx = uiData.findIndex(d => d.label.includes('Delete') || d.label.includes('main') || d.label.includes('clean_text') || d.label.includes('safe_parse'));
+      if (targetIdx !== -1) defaultIdx = targetIdx;
+
+      const targetItem = uiData[defaultIdx];
+      const targetRow = document.getElementById('row-anchor-' + defaultIdx);
+      if (targetItem.bundle_count > 0) {
+        showBundle(targetItem, targetRow);
+      } else if (funcsData[targetItem.anchor_id]) {
+        inspectFunction(targetItem.anchor_id, targetRow);
+      }
+    }
+  </script>
+</body>
+</html>
