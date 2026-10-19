@@ -60,17 +60,19 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             func_name_node = node.child_by_field_name("name")
             func_name = func_name_node.text.decode("utf-8") if func_name_node else "anonymous"
             start_line = node.start_point[0] + 1
-            new_scope_id = f"scope:{func_name}@{file_path}:L{start_line}"
+            start_col = node.start_point[1] + 1
+            new_scope_id = f"scope:{func_name}@{file_path}:L{start_line}C{start_col}"
             depth = scopes[current_scope_id]["depth"] + 1
 
+            func_node_id = f"func:{func_name}@{file_path}:L{start_line}C{start_col}"
             scopes[new_scope_id] = {
                 "id": new_scope_id,
                 "parent": current_scope_id,
                 "depth": depth,
-                "defs": {}
+                "defs": {},
+                "func_node_id": func_node_id,
             }
 
-            func_node_id = f"func:{func_name}@{file_path}:L{start_line}"
             is_async = (b"async" in node.children[0].text if node.children else False)
 
             scopes[current_scope_id]["defs"][func_name] = {
@@ -93,13 +95,15 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
 
         elif node.type in ("arrow_function", "function_expression"):
             start_line = node.start_point[0] + 1
-            new_scope_id = f"scope:arrow@{file_path}:L{start_line}"
+            start_col = node.start_point[1] + 1
+            new_scope_id = f"scope:arrow@{file_path}:L{start_line}C{start_col}"
             depth = scopes[current_scope_id]["depth"] + 1
             scopes[new_scope_id] = {
                 "id": new_scope_id,
                 "parent": current_scope_id,
                 "depth": depth,
-                "defs": {}
+                "defs": {},
+                "func_node_id": scopes.get(current_scope_id, {}).get("func_node_id"),
             }
             next_scope_id = new_scope_id
 
@@ -121,10 +125,12 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             func_name_node = node.child_by_field_name("name")
             func_name = func_name_node.text.decode("utf-8") if func_name_node else "anonymous"
             start_line = node.start_point[0] + 1
-            next_scope_id = f"scope:{func_name}@{file_path}:L{start_line}"
+            start_col = node.start_point[1] + 1
+            next_scope_id = f"scope:{func_name}@{file_path}:L{start_line}C{start_col}"
         elif node.type in ("arrow_function", "function_expression"):
             start_line = node.start_point[0] + 1
-            next_scope_id = f"scope:arrow@{file_path}:L{start_line}"
+            start_col = node.start_point[1] + 1
+            next_scope_id = f"scope:arrow@{file_path}:L{start_line}C{start_col}"
 
         # 1. 偵測 React TSX JSX 元素: <button onClick={handleDelete}>
         if node.type == "jsx_element" or node.type == "jsx_self_closing_element":
@@ -329,7 +335,7 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                 scope={"scope_id": caller_scope_id, "file": file_path, "line": line},
                 props={"is_blocking": True, "hazard": "SYNC_BLOCKING_UI"}
             )
-            parent_node = self._find_enclosing_node_id(caller_scope_id, graph)
+            parent_node = self._find_enclosing_node_id(caller_scope_id, scopes, graph)
             if parent_node:
                 graph.add_edge_rich(
                     source=parent_node,
@@ -340,7 +346,7 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                 )
             return
 
-        parent_node = self._find_enclosing_node_id(caller_scope_id, graph)
+        parent_node = self._find_enclosing_node_id(caller_scope_id, scopes, graph)
         flow_type = "AWAIT" if is_awaited else "SYNC"
 
         self._link_handler_with_reachability(
@@ -371,7 +377,9 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         declaring_scope_id = None
 
         curr = call_scope_id
-        while curr:
+        visited_scopes = set()
+        while curr and curr not in visited_scopes:
+            visited_scopes.add(curr)
             if callee_name in scopes.get(curr, {}).get("defs", {}):
                 found_def = scopes[curr]["defs"][callee_name]
                 declaring_scope_id = curr
@@ -431,16 +439,15 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                         detail="引用全域或外部函式"
                     )
 
-    def _find_enclosing_node_id(self, scope_id: str, graph: UIACodeGraph) -> Optional[str]:
-        for n, d in graph.g.nodes(data=True):
-            props = d.get("props", {})
-            scope = d.get("scope", {})
-            if props.get("inner_scope") == scope_id or scope.get("inner_scope") == scope_id:
-                return n
-
-        for n, d in graph.g.nodes(data=True):
-            if d.get("category") == "EVENT_BINDING" and scope_id in d.get("scope", {}).get("scope_id", ""):
-                return n
+    def _find_enclosing_node_id(self, scope_id: str, scopes: Dict[str, Dict[str, Any]], graph: UIACodeGraph) -> Optional[str]:
+        curr = scope_id
+        visited = set()
+        while curr and curr not in visited:
+            visited.add(curr)
+            func_id = scopes.get(curr, {}).get("func_node_id")
+            if func_id and func_id in graph.g:
+                return func_id
+            curr = scopes.get(curr, {}).get("parent")
 
         anchors = graph.get_ui_anchors()
         return anchors[0] if anchors else None

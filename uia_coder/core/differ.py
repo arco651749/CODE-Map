@@ -57,6 +57,12 @@ class UIAGraphDiffResult:
     def verdict(self) -> str:
         return self.invariants_after["verdict"]
 
+    @property
+    def invariant_violations(self) -> List[Dict[str, Any]]:
+        errs = self.invariants_after.get("scope_errors", [])
+        haz = self.invariants_after.get("hazards", [])
+        return [{"message": e.get("detail", str(e))} for e in errs + haz]
+
     def to_diff_markdown(self) -> str:
         lines = []
         lines.append("🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**")
@@ -112,25 +118,38 @@ class UIAGraphDiffResult:
         lines.append(f"\n**最終驗收裁決: {self.verdict}**")
         return "\n".join(lines)
 
-    def _render_graph_subtree(self, graph: UIACodeGraph, parent: str, lines: List[str], indent: str, prefix: str):
+    def _render_graph_subtree(self, graph: UIACodeGraph, parent: str, lines: List[str], indent: str, prefix: str, visited: Optional[Set[str]] = None):
+        if visited is None:
+            visited = set()
         for _s, target, d in graph.g.out_edges(parent, data=True):
             t_data = graph.g.nodes.get(target, {})
             label = t_data.get("label", target)
             e_type = d.get("edge_type", "")
             flow = "⏳ [await] " if d.get("flow_type") == "AWAIT" else ""
+            if target in visited:
+                lines.append(f"{prefix}{indent}└── *ref:`{label}()` [已折疊指針]")
+                continue
+            visited.add(target)
             lines.append(f"{prefix}{indent}└── {flow}[{e_type}] `{label}()`")
-            self._render_graph_subtree(graph, target, lines, indent + "    ", prefix)
+            self._render_graph_subtree(graph, target, lines, indent + "    ", prefix, visited)
 
-    def _render_dual_subtree(self, parent_b: str, parent_a: str, lines: List[str], indent: str):
+    def _render_dual_subtree(self, parent_b: str, parent_a: str, lines: List[str], indent: str, visited: Optional[Set[str]] = None):
+        if visited is None:
+            visited = set()
         # 建立 canonical 映射表: canon_target -> (raw_target, edge_data)
-        out_b = {self.canon_map_b[v]: (v, d) for _u, v, d in self.g_before.g.out_edges(parent_b, data=True) if v in self.canon_map_b}
-        out_a = {self.canon_map_a[v]: (v, d) for _u, v, d in self.g_after.g.out_edges(parent_a, data=True) if v in self.canon_map_a}
+        out_b = {self.canon_map_b[v]: (v, d) for _u, v, d in self.g_before.g.out_edges(parent_b, data=True) if v in self.canon_map_b} if parent_b else {}
+        out_a = {self.canon_map_a[v]: (v, d) for _u, v, d in self.g_after.g.out_edges(parent_a, data=True) if v in self.canon_map_a} if parent_a else {}
 
         all_targets = sorted(set(out_b.keys()) | set(out_a.keys()))
 
         for canon_tgt in all_targets:
             in_b = canon_tgt in out_b
             in_a = canon_tgt in out_a
+
+            if canon_tgt in visited:
+                lines.append(f"  {indent}└── *ref:`{canon_tgt}` [已折疊指針]")
+                continue
+            visited.add(canon_tgt)
 
             if in_b and not in_a:
                 v_b, d_b = out_b[canon_tgt]
@@ -144,7 +163,7 @@ class UIAGraphDiffResult:
                 flow = "⏳ [await] " if d_a.get("flow_type") == "AWAIT" else ""
                 status_icon = "🟢 " if d_a.get("status") == "VALID" else "💥 "
                 lines.append(f"+ {indent}└── {status_icon}{flow}[{d_a.get('edge_type')}] `{label}()` [新增因果]")
-                self._render_dual_subtree(parent_b="", parent_a=v_a, lines=lines, indent=indent + "    ")
+                self._render_dual_subtree(parent_b="", parent_a=v_a, lines=lines, indent=indent + "    ", visited=visited)
             else:
                 v_b, d_b = out_b[canon_tgt]
                 v_a, d_a = out_a[canon_tgt]
@@ -165,7 +184,7 @@ class UIAGraphDiffResult:
                     else:
                         lines.append(f"  {indent}└── 🎯 {flow}[{d_a.get('edge_type')}] `{label}()`")
 
-                self._render_dual_subtree(v_b, v_a, lines, indent + "    ")
+                self._render_dual_subtree(v_b, v_a, lines, indent + "    ", visited=visited)
 
 
 class UIAGraphDiffer:
@@ -237,6 +256,7 @@ class UIAGraphDiffer:
         repo_path: str,
         file_path: str,
         diff_range: str = "HEAD~1",
+        target_ref: Optional[str] = None,
     ) -> UIAGraphDiffResult:
         from uia_coder.adapters import get_adapter_for_file
 
@@ -246,7 +266,11 @@ class UIAGraphDiffer:
         res_old = subprocess.run(cmd_old, capture_output=True, text=True, encoding="utf-8", errors="replace")
         old_code = res_old.stdout if res_old.returncode == 0 else ""
 
-        if os.path.exists(file_path):
+        if target_ref:
+            cmd_new = ["git", "-C", repo_path, "show", f"{target_ref}:{rel_path}"]
+            res_new = subprocess.run(cmd_new, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            new_code = res_new.stdout if res_new.returncode == 0 else ""
+        elif os.path.exists(file_path):
             with open(file_path, "r", encoding="utf-8") as f:
                 new_code = f.read()
         else:

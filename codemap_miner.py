@@ -70,6 +70,9 @@ class CodeMapMiner:
         supported_exts = set(AdapterRegistry._registry.keys())
         files = []
         for f in res.stdout.splitlines():
+            lower = f.lower()
+            if lower.endswith(".min.js") or "worker" in lower or "vendor" in lower:
+                continue
             _, ext = os.path.splitext(f)
             if ext.lower() in supported_exts:
                 files.append(f)
@@ -87,6 +90,7 @@ class CodeMapMiner:
                     repo_path=self.repo_path,
                     file_path=full_path,
                     diff_range=f"{commit_hash}~1",
+                    target_ref=commit_hash,
                 )
                 file_audits.append({
                     "file": rel_file,
