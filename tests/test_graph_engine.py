@@ -1,4 +1,11 @@
+import os
 import sys
+
+# 將專案根目錄加入模組搜尋路徑
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -24,12 +31,16 @@ def test_registry_supported_languages():
     print("✅ 測試 0 通過：語言註冊中心與自動路由 100% 正常！")
 
 
+def get_src_path(filename: str) -> str:
+    return os.path.join(project_root, "src", filename)
+
+
 def test_js_buggy_commit():
     print("\n" + "=" * 60)
     print("▶ 測試 1 (JavaScript): Buggy Commit (閉包作用域囚禁 + confirm 阻塞)")
     print("=" * 60)
 
-    with open("src/workspaceFileTree_buggy.js", "r", encoding="utf-8") as f:
+    with open(get_src_path("workspaceFileTree_buggy.js"), "r", encoding="utf-8") as f:
         code = f.read()
 
     adapter = get_adapter_for_file("workspaceFileTree.js")
@@ -46,7 +57,7 @@ def test_js_fixed_commit():
     print("▶ 測試 2 (JavaScript): Fix Commit (作用域提升修復 + 守衛驗收通過)")
     print("=" * 60)
 
-    with open("src/workspaceFileTree.js", "r", encoding="utf-8") as f:
+    with open(get_src_path("workspaceFileTree.js"), "r", encoding="utf-8") as f:
         code = f.read()
 
     adapter = get_adapter_for_file("workspaceFileTree.js")
@@ -111,9 +122,9 @@ def test_graph_diffing():
     print("=" * 60)
 
     adapter = get_adapter_for_file("workspaceFileTree.js")
-    with open("src/workspaceFileTree_buggy.js", "r", encoding="utf-8") as f:
+    with open(get_src_path("workspaceFileTree_buggy.js"), "r", encoding="utf-8") as f:
         g_b = adapter.parse_and_build(f.read(), "before.js")
-    with open("src/workspaceFileTree.js", "r", encoding="utf-8") as f:
+    with open(get_src_path("workspaceFileTree.js"), "r", encoding="utf-8") as f:
         g_a = adapter.parse_and_build(f.read(), "after.js")
 
     diff_res = UIAGraphDiffer.diff_graphs(g_b, g_a)

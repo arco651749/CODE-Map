@@ -50,33 +50,32 @@ flowchart TD
 ```text
 d:\AntiGravity\UIA_Coder\
 ├── codemap.py                       # 🌲 CODE-Map 官方統一命令列入口 (Official CLI)
-├── codemap_miner.py                 # ⛏️ GitHub 實戰探勘與基準天梯評估工具 (Benchmark Miner)
-├── uia_coder/                       # 🧠 CODE-Map 核心套件 (Core & Adapters)
+├── uia_coder/                       # 🧠 CODE-Map 核心引擎套件 (Core & Adapters)
 │   ├── core/                        # 語言無關圖論運算層
 │   │   ├── graph.py                 # UIACodeGraph (NetworkX 圖結構、切片、驗收)
-│   │   ├── differ.py                # ⚡ UIAGraphDiffer (正規鍵對齊圖譜語意差分引擎)
+│   │   ├── differ.py                # ⚡ UIAGraphDiffer (圖譜語意差分與代碼對照引擎)
 │   │   └── base_adapter.py          # BaseUIAGraphBuilder (適配器抽象介面)
 │   ├── adapters/                    # 🔌 語言專屬語意解析層 (Strategy / Registry)
-│   │   ├── __init__.py              # 語言註冊中心與依副檔名自動路由工廠
+│   │   ├── __init__.py              # 語言註冊中心與自動路由工廠
 │   │   ├── javascript_adapter.py    # JavaScript DOM / ES6 閉包適配器
-│   │   ├── typescript_adapter.py    # TypeScript / React TSX 適配器 (含 JSX 屬性接線)
-│   │   └── python_adapter.py        # Python PyQt 信號槽 / time.sleep 守衛適配器
-│   └── cli.py                       # 🚀 底層 CLI 實作模組
-├── uia_graph_engine.py              # 向後相容轉發層入口
-├── test_graph_engine.py             # 多語言整合驗收與 UIA-Diff 測試套件
-├── uia_code_diff.py                 # 歷史 UIA 語意差分分析工具 (含 HTML 儀表板)
+│   │   ├── typescript_adapter.py    # TypeScript / React TSX 適配器
+│   │   └── python_adapter.py        # Python OOP、CLI 入口與 PyQt 守衛適配器
+│   ├── cli.py                       # 🚀 命令列介面邏輯實作
+│   └── __main__.py                  # 支援 python -m uia_coder 執行模組
+├── tests/                           # 🧪 自動化測試套件
+│   ├── test_graph_engine.py         # 多語言圖譜構建與狀態躍遷測試 (Tests 0-5)
+│   └── test_workspace_commits.py    # 真實 Git 倉庫歷史 Commits 語意驗收測試
+├── tools/                           # 🛠️ 輔助開發與探勘工具
+│   ├── codemap_miner.py             # ⛏️ Git 倉庫歷史 Commits 探勘評估引擎
+│   └── generate_interactive_report.py # 雙欄互動式 HTML 儀表板生成器
+├── legacy/                          # 📦 歷史封存 (早期原型與過渡轉發墊片)
+│   ├── uia_graph_engine.py          # 早期向後相容墊片 (已模組化至 uia_coder)
+│   └── uia_code_diff.py             # 第一代正則差分原型
 ├── vendor/
 │   └── aider/repomap.py             # Aider 官方 RepoMap 參考實作
+├── reports/                         # 生成之 HTML 視覺化儀表板
 ├── AGENTS.md                        # Antigravity 專案規則與環境規範
-├── README.md                        # 本專案架構與使用指引
-├── .marimo/
-│   ├── shared_toolbox.py            # 跨會話共用工具箱
-│   └── 394096b1-bc18-40c1-8189-21c4f485bf2d/
-│       └── marimo_session.py        # 本次會話之 Living Notebook (含互動測試面板)
-└── reports/                         # 本次實測產出之 HTML 視覺化儀表板
-    ├── workspace_file_tree_buggy_commit_diff.html  # df3cc5f 阻擋發布儀表板
-    ├── workspace_file_tree_fixed_commit_diff.html  # a1995e4 驗收通過儀表板
-    └── code_comparison.html                        # Side-by-side 競態模擬器
+└── README.md                        # 本專案架構與使用指引
 ```
 
 ---

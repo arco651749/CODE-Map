@@ -3,6 +3,11 @@ import subprocess
 import sys
 import time
 
+# 將專案根目錄加入模組搜尋路徑
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
