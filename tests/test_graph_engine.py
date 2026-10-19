@@ -23,12 +23,14 @@ def test_registry_supported_languages():
     for lang in languages:
         print(f"  • {lang['language']:12} -> {lang['extensions']}")
 
-    assert len(languages) >= 2
+    assert len(languages) >= 3
     js_adapter = get_adapter_for_file("app.js")
     assert js_adapter.language_name == "JavaScript"
     py_adapter = get_adapter_for_file("gui.py")
     assert py_adapter.language_name == "Python"
-    print("✅ 測試 0 通過：語言註冊中心與自動路由 100% 正常！")
+    rust_adapter = get_adapter_for_file("server.rs")
+    assert rust_adapter.language_name == "Rust"
+    print("✅ 測試 0 通過：語言註冊中心與自動路由 (JS/TS/Python/Rust) 100% 正常！")
 
 
 def get_src_path(filename: str) -> str:
@@ -137,6 +139,34 @@ def test_graph_diffing():
     print("\n✅ 測試 5 通過：UIA 圖譜差分引擎成功檢測因果躍遷與修復驗收！")
 
 
+def test_rust_support():
+    print("\n" + "=" * 60)
+    print("▶ 測試 6 (Rust): WebServer 結構體關聯方法、CLI 進入點與 todo!() 危害阻擋")
+    print("=" * 60)
+
+    rust_file = get_src_path("sample_rust_app.rs")
+    with open(rust_file, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    adapter = get_adapter_for_file("sample_rust_app.rs")
+    assert adapter.language_name == "Rust"
+
+    graph = adapter.parse_and_build(code, file_path="sample_rust_app.rs")
+
+    # 驗證 CLI 入口
+    nodes_by_label = {d.get("label"): n for n, d in graph.g.nodes(data=True)}
+    assert "#CLI: main" in nodes_by_label, "必須自動識別 fn main() 並建構 #CLI: main 根節點！"
+    assert "WebServer::start" in nodes_by_label, "必須識別 impl WebServer 結構體關聯方法！"
+    assert "WebServer::bind_socket" in nodes_by_label, "必須識別 self.bind_socket() 私有呼叫！"
+
+    # 驗證危害攔截
+    inv = graph.check_invariants()
+    assert not inv["passed"], "存在 todo!() 巨集的 Rust 程式必須亮紅牌攔截！"
+    assert len(inv["hazards"]) > 0, "必須檢測到 todo!() 造成的 RUST_TODO 執行期危害！"
+    print(f"  • 成功攔截未決危害: {[h.get('detail') for h in inv['hazards']]}")
+    print("✅ 測試 6 通過：Rust Tree-sitter 控制樹與 todo!() 執行期危害完全攔截！")
+
+
 if __name__ == "__main__":
     test_registry_supported_languages()
     test_js_buggy_commit()
@@ -144,6 +174,8 @@ if __name__ == "__main__":
     test_python_buggy_code()
     test_python_fixed_code()
     test_graph_diffing()
+    test_rust_support()
     print("\n" + "=" * 60)
-    print("🎉 ALL TESTS (INCLUDING UIA-DIFF) PASSED WITH 100% SUCCESS!")
+    print("🎉 ALL TESTS (INCLUDING RUST & UIA-DIFF) PASSED WITH 100% SUCCESS!")
     print("=" * 60)
+

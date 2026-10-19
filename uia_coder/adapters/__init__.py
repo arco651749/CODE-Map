@@ -4,6 +4,7 @@ from uia_coder.core.base_adapter import BaseUIAGraphBuilder
 from uia_coder.adapters.javascript_adapter import JavaScriptUIAGraphBuilder
 from uia_coder.adapters.python_adapter import PythonUIAGraphBuilder
 from uia_coder.adapters.typescript_adapter import TypeScriptUIAGraphBuilder
+from uia_coder.adapters.rust_adapter import RustUIAGraphBuilder
 
 
 class AdapterRegistry:
@@ -52,10 +53,11 @@ class AdapterRegistry:
         return languages
 
 
-# 自動註冊已實作之適配器 (JavaScript, Python, TypeScript)
+# 自動註冊已實作之適配器 (JavaScript, Python, TypeScript, Rust)
 AdapterRegistry.register(JavaScriptUIAGraphBuilder)
 AdapterRegistry.register(PythonUIAGraphBuilder)
 AdapterRegistry.register(TypeScriptUIAGraphBuilder)
+AdapterRegistry.register(RustUIAGraphBuilder)
 
 
 def get_adapter_for_file(file_path: str) -> BaseUIAGraphBuilder:
@@ -68,4 +70,5 @@ __all__ = [
     "JavaScriptUIAGraphBuilder",
     "PythonUIAGraphBuilder",
     "TypeScriptUIAGraphBuilder",
+    "RustUIAGraphBuilder",
 ]
