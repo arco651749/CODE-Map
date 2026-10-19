@@ -23,14 +23,18 @@ def test_registry_supported_languages():
     for lang in languages:
         print(f"  • {lang['language']:12} -> {lang['extensions']}")
 
-    assert len(languages) >= 3
+    assert len(languages) >= 5
     js_adapter = get_adapter_for_file("app.js")
     assert js_adapter.language_name == "JavaScript"
     py_adapter = get_adapter_for_file("gui.py")
     assert py_adapter.language_name == "Python"
     rust_adapter = get_adapter_for_file("server.rs")
     assert rust_adapter.language_name == "Rust"
-    print("✅ 測試 0 通過：語言註冊中心與自動路由 (JS/TS/Python/Rust) 100% 正常！")
+    go_adapter = get_adapter_for_file("main.go")
+    assert go_adapter.language_name == "Go"
+    cs_adapter = get_adapter_for_file("App.cs")
+    assert cs_adapter.language_name == "C#"
+    print("✅ 測試 0 通過：語言註冊中心與自動路由 (JS/TS/Python/Rust/Go/C#) 100% 正常！")
 
 
 def get_src_path(filename: str) -> str:
@@ -167,6 +171,58 @@ def test_rust_support():
     print("✅ 測試 6 通過：Rust Tree-sitter 控制樹與 todo!() 執行期危害完全攔截！")
 
 
+def test_go_support():
+    print("\n" + "=" * 60)
+    print("▶ 測試 7 (Go): APIGateway 結構體接收器、CLI 進入點與 panic()/time.Sleep() 危害阻擋")
+    print("=" * 60)
+
+    go_file = get_src_path("sample_go_app.go")
+    with open(go_file, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    adapter = get_adapter_for_file("sample_go_app.go")
+    assert adapter.language_name == "Go"
+
+    graph = adapter.parse_and_build(code, file_path="sample_go_app.go")
+
+    nodes_by_label = {d.get("label"): n for n, d in graph.g.nodes(data=True)}
+    assert "#CLI: main" in nodes_by_label, "必須自動識別 func main() 並建構 #CLI: main 根節點！"
+    assert "APIGateway.Start" in nodes_by_label, "必須識別 APIGateway 結構體接收器方法！"
+    assert "APIGateway.listen" in nodes_by_label, "必須識別內部 listen() 呼叫！"
+
+    inv = graph.check_invariants()
+    assert not inv["passed"], "存在 panic() 與 time.Sleep() 的 Go 程式必須亮紅牌攔截！"
+    assert len(inv["hazards"]) >= 2, "必須檢測到 panic() 與 time.Sleep() 造成的執行期危害！"
+    print(f"  • 成功攔截 Go 危害: {[h.get('detail') for h in inv['hazards']]}")
+    print("✅ 測試 7 通過：Go 結構體接收器與恐慌阻塞危害完全攔截！")
+
+
+def test_csharp_support():
+    print("\n" + "=" * 60)
+    print("▶ 測試 8 (C#): WPF/WinUI 控制項事件綁定、Thread.Sleep() 與未實作例外阻擋")
+    print("=" * 60)
+
+    cs_file = get_src_path("sample_csharp_app.cs")
+    with open(cs_file, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    adapter = get_adapter_for_file("sample_csharp_app.cs")
+    assert adapter.language_name == "C#"
+
+    graph = adapter.parse_and_build(code, file_path="sample_csharp_app.cs")
+
+    nodes_by_label = {d.get("label"): n for n, d in graph.g.nodes(data=True)}
+    assert "#btnDeleteFile" in nodes_by_label, "必須從 btnDeleteFile.Click += ... 識別 UI 控制項錨點！"
+    assert "Click()" in nodes_by_label, "必須識別 Click 事件節點！"
+    assert "FileExplorerWindow.OnDeleteFileClicked" in nodes_by_label, "必須消解目標事件處理常式！"
+
+    inv = graph.check_invariants()
+    assert not inv["passed"], "存在 Thread.Sleep 與未完成實作例外的 C# 程式必須亮紅牌！"
+    assert len(inv["hazards"]) >= 2, "必須檢測到 Thread.Sleep 與 NotImplementedException！"
+    print(f"  • 成功攔截 C# 危害: {[h.get('detail') for h in inv['hazards']]}")
+    print("✅ 測試 8 通過：C# WPF/WinUI 控制項事件接線與執行緒凍結例外完全攔截！")
+
+
 if __name__ == "__main__":
     test_registry_supported_languages()
     test_js_buggy_commit()
@@ -175,7 +231,10 @@ if __name__ == "__main__":
     test_python_fixed_code()
     test_graph_diffing()
     test_rust_support()
+    test_go_support()
+    test_csharp_support()
     print("\n" + "=" * 60)
-    print("🎉 ALL TESTS (INCLUDING RUST & UIA-DIFF) PASSED WITH 100% SUCCESS!")
+    print("🎉 ALL TESTS (JS/TS/PY/RUST/GO/C# & UIA-DIFF) PASSED WITH 100% SUCCESS!")
     print("=" * 60)
+
 

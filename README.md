@@ -60,13 +60,17 @@ d:\AntiGravity\UIA_Coder\
 │   │   ├── javascript_adapter.py    # JavaScript DOM / ES6 閉包適配器
 │   │   ├── typescript_adapter.py    # TypeScript / React TSX 適配器
 │   │   ├── python_adapter.py        # Python OOP、CLI 入口與 PyQt 守衛適配器
-│   │   └── rust_adapter.py          # 🦀 Rust 結構體關聯方法、CLI 進入點與巨集危害適配器
+│   │   ├── rust_adapter.py          # 🦀 Rust 結構體關聯方法、CLI 進入點與巨集危害適配器
+│   │   ├── go_adapter.py            # 🐹 Go 接收器方法、CLI 進入點與 panic/sleep 危害適配器
+│   │   └── csharp_adapter.py        # 🎯 C# WPF/WinUI 事件綁定、CLI 與 Thread.Sleep 危害適配器
 │   ├── cli.py                       # 🚀 命令列介面邏輯實作
 │   └── __main__.py                  # 支援 python -m uia_coder 執行模組
-├── src/                             # 📄 多語言範例代碼 (JS/Python/Rust)
-│   └── sample_rust_app.rs           # 🦀 Rust 範例程式 (包含 todo! 危害攔截示範)
+├── src/                             # 📄 多語言範例代碼 (JS/Python/Rust/Go/C#)
+│   ├── sample_rust_app.rs           # 🦀 Rust 範例程式 (包含 todo! 危害攔截示範)
+│   ├── sample_go_app.go             # 🐹 Go 範例程式 (包含 panic/time.Sleep 示範)
+│   └── sample_csharp_app.cs         # 🎯 C# 範例程式 (包含 WPF 事件接線與 Thread.Sleep 示範)
 ├── tests/                           # 🧪 自動化測試套件
-│   ├── test_graph_engine.py         # 多語言圖譜構建、差分與 Rust 驗收測試 (Tests 0-6)
+│   ├── test_graph_engine.py         # 多語言圖譜構建、差分與全語言驗收測試 (Tests 0-8)
 │   └── test_workspace_commits.py    # 真實 Git 倉庫歷史 Commits 語意驗收測試
 ├── tools/                           # 🛠️ 輔助開發與探勘工具
 │   ├── codemap_miner.py             # ⛏️ Git 倉庫歷史 Commits 探勘評估引擎
@@ -86,16 +90,19 @@ d:\AntiGravity\UIA_Coder\
 ## 🚀 快速上手 (Quick Start)
 
 ### 1. 執行 CODE-Map CLI 引擎
-支援傳入 `.js`、`.ts`、`.tsx`、`.py` 或 `.rs` 檔案，引擎會**自動辨識副檔名並調用對應語言適配器**：
+支援傳入 `.js`、`.ts`、`.tsx`、`.py`、`.rs`、`.go` 或 `.cs` 檔案，引擎會**自動辨識副檔名並調用對應語言適配器**：
 ```powershell
-# 查詢目前已支援之程式語言 (已支援 JavaScript, TypeScript, Python, Rust)
+# 查詢目前已支援之程式語言 (已支援 JavaScript, TypeScript, Python, Rust, Go, C#)
 python.exe -X utf8 codemap.py --list-languages
 
 # 分析單一檔案並驗收 (直接輸出極簡 UIA 語意控制樹)
 python.exe -X utf8 codemap.py --file "src/workspaceFileTree.js" --check
 
-# 分析 Rust 程式並輸出互動式 HTML 視覺化儀表板
-python.exe -X utf8 codemap.py --file "src/sample_rust_app.rs" --html "reports/sample_rust_codemap.html"
+# 分析 Go 程式並輸出互動式 HTML 視覺化儀表板
+python.exe -X utf8 codemap.py --file "src/sample_go_app.go" --html "reports/sample_go_codemap.html"
+
+# 分析 C# WPF/WinUI 程式並輸出互動式 HTML 視覺化儀表板
+python.exe -X utf8 codemap.py --file "src/sample_csharp_app.cs" --html "reports/sample_csharp_codemap.html"
 
 # 比對兩個檔案之間的語意圖譜差分 (Parent 規格書 vs Subagent 實作代碼)
 python.exe -X utf8 codemap.py --diff-files "src/workspaceFileTree_buggy.js" "src/workspaceFileTree.js" --check
@@ -106,7 +113,7 @@ python.exe -X utf8 codemap.py --file "src/workspaceFileTree.js" --git-diff "HEAD
 # ⛏️ 執行 GitHub 倉庫自動探勘 (批次審查帶有 fix/perf 之 Commit 並產出天梯報告)
 python.exe -X utf8 tools/codemap_miner.py --repo "D:\path\to\repo" --max 10 --output "reports/benchmark.md"
 
-# 執行全套多語言自動化測試 (含 UIA-Diff 與 Rust 驗收)
+# 執行全套多語言自動化測試 (含 UIA-Diff 與 JS/TS/Py/Rust/Go/C# 驗收)
 python.exe -X utf8 tests/test_graph_engine.py
 ```
 
@@ -137,6 +144,14 @@ python.exe -X utf8 -m marimo edit ".marimo/394096b1-bc18-40c1-8189-21c4f485bf2d/
   * 支援 `struct` + `impl Struct` 關聯方法解析與 `self.method()` 消解。
   * 自動將 `fn main()` 識別並錨定為 `#CLI: main` 控制樹進入點。
   * 攔截未完成實作巨集 (`todo!()`, `unimplemented!()`) 與執行期崩潰巨集 (`panic!()`)，自動觸發非同步守衛阻擋（`🔴 BLOCKED_BY_INVARIANTS`）。
+* **🐹 Go (結構體接收器與併發恐慌)**：
+  * 支援 `func (s *Server) Method()` 結構體接收器方法與作用域消解。
+  * 自動識別 `func main()` 並合成 `#CLI: main` 進入點。
+  * 攔截 `panic()` 致命恐慌與 `time.Sleep()` 阻塞危害（`🔴 BLOCKED_BY_INVARIANTS`）。
+* **🎯 C# (WPF/WinUI 控制項事件綁定與執行緒凍結)**：
+  * 支援 `btnDelete.Click += OnClick` 事件綁定，直接生成原生 `#btnDelete (Button)` 控制項錨點。
+  * 自動建立事件觸發與處理常式因果接線。
+  * 攔截 UI 主執行緒中的 `Thread.Sleep()` 介面凍結與 `NotImplementedException` 未完成實作例外（`🔴 BLOCKED_BY_INVARIANTS`）。
 
 ---
 
@@ -144,12 +159,14 @@ python.exe -X utf8 -m marimo edit ".marimo/394096b1-bc18-40c1-8189-21c4f485bf2d/
 
 1. [x] **整合 Tree-sitter AST 解析與 NetworkX 有向圖**：已於 `uia_coder` 落地，支援現代 Scope Stack 與閉包阻隔消解。
 2. [x] **模組化多語言架構 (Adapter & Registry Pattern)**：將圖論核心與語意適配器徹底解耦，支援依副檔名自動分發。
-3. [x] **支援多語言生態 (JavaScript + TypeScript + Python + Rust)**：
+3. [x] **支援 6 大主流語言生態 (JavaScript + TypeScript + Python + Rust + Go + C#)**：
    - JS/TS DOM 閉包與非同步調用鏈。
    - Python PyQt/Tkinter 槽函式可達性與 UI 阻塞檢測。
    - Rust 結構體關聯方法、CLI 進入點與 `todo!()`/`panic!()` 危害攔截。
+   - Go 結構體接收器方法、CLI 進入點與 `panic()`/`time.Sleep()` 危害攔截。
+   - C# WPF/WinUI 事件綁定、控制項錨點與 `Thread.Sleep()`/`NotImplementedException` 攔截。
 4. [x] **加入 UI 錨點圖切片 (Graph Slicing)**：`forward_slice(anchor_id)` 可從 UI 控制項向下切出受影響的完整因果子圖。
 5. [x] **標準化 Node-Link 序列化**：支援 `to_node_link_data()`，為 MCP Tool 與 Agent 協議提供零成本格式互轉。
 6. [x] **v2 統一互動式雙欄 HTML 儀表板**：支援點擊節點平滑滾動並高亮對應原始碼行號。
 7. [ ] **封裝為 Agent MCP Tool**：提供給 Claude / Gemini 等 Coding Agent 即時調用圖譜與驗收能力。
-8. [ ] **擴充 C# (WinUI / WPF) 與 Go 適配器**。
+8. [ ] **擴充 Dart (Flutter UI) 與 Java/Kotlin 適配器**。

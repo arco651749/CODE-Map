@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>CODE-Map 全景語意因果地圖 - sample_csharp_app.cs</title>
+  <style>
+    :root {
+      --bg: #1e1e2e;
+      --card-bg: #252538;
+      --tree-bg: #181825;
+      --border: #313244;
+      --text: #cdd6f4;
+      --text-dim: #a6adc8;
+      --primary: #89b4fa;
+      --accent: #f5c2e7;
+      --success: #a6e3a1;
+      --warning: #f9e2af;
+      --danger: #f38ba8;
+      --code-bg: #11111b;
+      --drawer-bg: #1e1e2e;
+      --btn-bg: #313244;
+      --btn-hover: #45475a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      padding: 16px;
+      line-height: 1.5;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .header h1 {
+      font-size: 19px;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header h1 span {
+      font-size: 13px;
+      color: var(--text-dim);
+      font-weight: normal;
+    }
+    .badge-pass {
+      background: rgba(166, 227, 161, 0.15);
+      color: var(--success);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--success);
+    }
+    .badge-danger {
+      background: rgba(243, 139, 168, 0.15);
+      color: var(--danger);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--danger);
+    }
+    .stats-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      flex: 1;
+    }
+    .stat-val {
+      font-size: 20px;
+      font-weight: bold;
+      color: var(--primary);
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .search-input {
+      flex: 1;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: var(--primary);
+    }
+    .layout {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .tree-col {
+      flex: 1.1;
+      background: var(--tree-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12.5px;
+      overflow-x: auto;
+      max-height: 720px;
+      overflow-y: auto;
+    }
+    .code-col {
+      flex: 0.9;
+      background: var(--drawer-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      position: sticky;
+      top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 720px;
+    }
+    .tree-item {
+      margin-bottom: 4px;
+    }
+    .node-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.1s;
+    }
+    .node-row:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .node-row.active {
+      background: rgba(137, 180, 250, 0.2) !important;
+      border-left: 3px solid var(--primary);
+    }
+    .tag-ctrl {
+      color: #89dceb;
+      font-weight: 700;
+    }
+    .tag-btn {
+      color: #89b4fa;
+      font-weight: 700;
+      background: rgba(137, 180, 250, 0.15);
+      padding: 1px 7px;
+      border-radius: 4px;
+      border: 1px solid rgba(137, 180, 250, 0.3);
+    }
+    .tag-event {
+      color: #f9e2af;
+      font-weight: 600;
+    }
+    .tag-func {
+      color: #a6e3a1;
+      font-weight: 600;
+    }
+    .tag-await {
+      color: #fab387;
+      font-size: 10px;
+      font-weight: bold;
+      background: rgba(250, 179, 135, 0.15);
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+    .tag-blocked {
+      color: #f38ba8;
+      font-size: 10px;
+      font-weight: bold;
+      background: rgba(243, 139, 168, 0.15);
+      padding: 0 4px;
+      border-radius: 3px;
+      border: 1px solid var(--danger);
+    }
+    .tag-type {
+      font-size: 11px;
+      color: var(--text-dim);
+      background: var(--card-bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    
+    /* 核心操作按鈕 */
+    .btn-action-code {
+      margin-left: auto;
+      background: #89b4fa;
+      color: #11111b;
+      border: none;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      transition: all 0.15s;
+    }
+    .btn-action-code:hover {
+      background: #b4befe;
+      transform: translateY(-1px);
+    }
+    .btn-bundle-code {
+      margin-left: 6px;
+      background: rgba(245, 194, 231, 0.2);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-bundle-code:hover {
+      background: var(--accent);
+      color: #11111b;
+    }
+
+    .sub-tree {
+      margin-left: 18px;
+      border-left: 1px dashed var(--border);
+      padding-left: 8px;
+    }
+    .arrow {
+      color: var(--text-dim);
+      font-size: 10px;
+      display: inline-block;
+      width: 12px;
+      transition: transform 0.15s;
+    }
+    .collapsed > .sub-tree { display: none; }
+    .collapsed > .node-row .arrow { transform: rotate(-90deg); }
+    
+    /* Code Viewer Panel */
+    .code-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--primary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .code-meta {
+      font-size: 12px;
+      color: var(--text);
+      background: var(--card-bg);
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .code-box {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12px;
+      color: #cdd6f4;
+      overflow-y: auto;
+      max-height: 520px;
+      white-space: pre;
+      line-height: 1.45;
+    }
+    .copy-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 3px 9px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .copy-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>🌲 CODE-Map 全景語意因果地圖 <span>(sample_csharp_app.cs)</span></h1>
+    <div class="badge-danger">🔴 BLOCKED_BY_INVARIANTS</div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-val">1</div>
+      <div class="stat-label">錨點/入口數量 (Anchors)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">5</div>
+      <div class="stat-label">已截取原始碼函式 (NetworkX Props)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--success);">0</div>
+      <div class="stat-label">作用域阻隔 (Scope Errors)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--warning);">4</div>
+      <div class="stat-label">危害調用 (Hazards)</div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" id="searchInput" class="search-input" placeholder="🔍 即時搜尋控制項、按鈕、CLI 或函式名稱..." oninput="filterTree()">
+  </div>
+
+  <div class="layout">
+    <div class="tree-col" id="treeRoot">
+      <!-- 樹狀控制項將透過 JavaScript 動態渲染 -->
+    </div>
+
+    <div class="code-col" id="codePanel">
+      <div class="code-title">
+        <span id="panelTitle">💻 程式碼切片檢視器</span>
+        <button class="copy-btn" id="copyCodeBtn" onclick="copyCode()">複製代碼 📋</button>
+      </div>
+      <div id="inspectorContent">
+        <!-- 預設載入首個錨點之代碼 -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const uiData = [{"anchor_id": "ctrl:#btnDeleteFile@src/sample_csharp_app.cs:L11", "label": "#btnDeleteFile", "ui_type": "Button / UI Control", "line": 11, "tree": {"id": "ctrl:#btnDeleteFile@src/sample_csharp_app.cs:L11", "label": "#btnDeleteFile", "category": "UI_CONTROL", "has_code": false, "children": [{"id": "event:btnDeleteFile.Click@src/sample_csharp_app.cs:L11", "label": "Click()", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:FileExplorerWindow.OnDeleteFileClicked@src/sample_csharp_app.cs:L14", "label": "FileExplorerWindow.OnDeleteFileClicked", "category": "FUNCTION_DEF", "has_code": true, "children": [{"id": "hazard:Thread.Sleep@src/sample_csharp_app.cs:L17", "label": "Thread.Sleep() [同步休眠/UI凍結]", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "BLOCKED_INVARIANT", "is_await": false, "detail": "呼叫了 Thread.Sleep() 同步阻塞 UI 執行緒"}, {"id": "hazard:NotImplementedException@src/sample_csharp_app.cs:L20", "label": "NotImplementedException [未完成實作危害]", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "BLOCKED_INVARIANT", "is_await": false, "detail": "拋出了未完成實作例外: NotImplementedException"}], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "C# 事件訂閱觸發: 作用域可達 (定義於 scope:class:FileExplorerWindow)"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": ""}]}, "bundle_count": 3, "bundle_funcs": ["hazard:NotImplementedException@src/sample_csharp_app.cs:L20", "hazard:Thread.Sleep@src/sample_csharp_app.cs:L17", "func:FileExplorerWindow.OnDeleteFileClicked@src/sample_csharp_app.cs:L14"], "bundle_text": "# 📦 CODE-Map 因果切片代碼包: ctrl:#btnDeleteFile@src/sample_csharp_app.cs:L11\n\n## 🔹 FileExplorerWindow.OnDeleteFileClicked(object sender, EventArgs e) (src/sample_csharp_app.cs: L14~L21)\n```\nnDeleteFileClicked(object sender, EventArgs e)\n        {\n            // 危害 1: 在 UI 執行緒直接調用同步休眠造成介面凍結\n            Thread.Sleep(3000);\n\n            // 危害 2: 呼叫未完成實作的例外\n            throw new NotImplementedException(\"雲端檔案刪除邏輯尚未實作完成\");\n        }\n\n        public static void Main(string[] args)\n        {\n            var window = new FileExplorerWindow\n```\n"}];
+    const funcsData = {"func:FileExplorerWindow.InitializeControls@src/sample_csharp_app.cs:L8": {"id": "func:FileExplorerWindow.InitializeControls@src/sample_csharp_app.cs:L8", "label": "FileExplorerWindow.InitializeControls", "raw_label": "FileExplorerWindow.InitializeControls", "signature": "FileExplorerWindow.InitializeControls()", "parameters": "()", "line_start": 8, "line_end": 12, "line_count": 5, "is_async": false, "source_code": "public void InitializeControls()\n        {\n            // WPF / WinUI 控制項事件綁定\n            btnDeleteFile.Click += OnDeleteFileClicked;\n        }\n\n        priv", "scope_id": "scope:class:FileExplorerWindow", "class_name": "FileExplorerWindow"}, "func:FileExplorerWindow.OnDeleteFileClicked@src/sample_csharp_app.cs:L14": {"id": "func:FileExplorerWindow.OnDeleteFileClicked@src/sample_csharp_app.cs:L14", "label": "FileExplorerWindow.OnDeleteFileClicked", "raw_label": "FileExplorerWindow.OnDeleteFileClicked", "signature": "FileExplorerWindow.OnDeleteFileClicked(object sender, EventArgs e)", "parameters": "(object sender, EventArgs e)", "line_start": 14, "line_end": 21, "line_count": 8, "is_async": false, "source_code": "nDeleteFileClicked(object sender, EventArgs e)\n        {\n            // 危害 1: 在 UI 執行緒直接調用同步休眠造成介面凍結\n            Thread.Sleep(3000);\n\n            // 危害 2: 呼叫未完成實作的例外\n            throw new NotImplementedException(\"雲端檔案刪除邏輯尚未實作完成\");\n        }\n\n        public static void Main(string[] args)\n        {\n            var window = new FileExplorerWindow", "scope_id": "scope:class:FileExplorerWindow", "class_name": "FileExplorerWindow"}, "func:FileExplorerWindow.Main@src/sample_csharp_app.cs:L23": {"id": "func:FileExplorerWindow.Main@src/sample_csharp_app.cs:L23", "label": "FileExplorerWindow.Main", "raw_label": "FileExplorerWindow.Main", "signature": "FileExplorerWindow.Main(string[] args)", "parameters": "(string[] args)", "line_start": 23, "line_end": 27, "line_count": 5, "is_async": false, "source_code": "      window.InitializeControls();\n        }\n    }\n}\n", "scope_id": "scope:class:FileExplorerWindow", "class_name": "FileExplorerWindow"}, "hazard:Thread.Sleep@src/sample_csharp_app.cs:L17": {"id": "hazard:Thread.Sleep@src/sample_csharp_app.cs:L17", "label": "Thread.Sleep() [同步休眠/UI凍結]", "raw_label": "Thread.Sleep() [同步休眠/UI凍結]", "signature": "Thread.Sleep() [同步休眠/UI凍結]", "parameters": "()", "line_start": 17, "line_end": 17, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "scope:fn:FileExplorerWindow.OnDeleteFileClicked@14", "class_name": ""}, "hazard:NotImplementedException@src/sample_csharp_app.cs:L20": {"id": "hazard:NotImplementedException@src/sample_csharp_app.cs:L20", "label": "NotImplementedException [未完成實作危害]", "raw_label": "NotImplementedException [未完成實作危害]", "signature": "NotImplementedException [未完成實作危害]", "parameters": "()", "line_start": 20, "line_end": 20, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "scope:fn:FileExplorerWindow.OnDeleteFileClicked@14", "class_name": ""}};
+
+    let currentSourceCode = "";
+
+    function renderTree() {
+      const root = document.getElementById('treeRoot');
+      root.innerHTML = '';
+
+      uiData.forEach((item, idx) => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'tree-item';
+        itemEl.dataset.label = item.label.toLowerCase();
+        itemEl.id = 'anchor-' + idx;
+
+        const row = document.createElement('div');
+        row.className = 'node-row';
+        row.id = 'row-anchor-' + idx;
+
+        const arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        arrow.textContent = (item.tree.children && item.tree.children.length > 0) ? '▼' : '';
+        row.appendChild(arrow);
+
+        const ctrlTag = document.createElement('span');
+        ctrlTag.className = (item.ui_type === 'Button' || item.ui_type === 'CLI Entry') ? 'tag-btn' : 'tag-ctrl';
+        ctrlTag.textContent = item.label;
+        row.appendChild(ctrlTag);
+
+        const typeTag = document.createElement('span');
+        typeTag.className = 'tag-type';
+        typeTag.textContent = item.ui_type + ' @ L' + item.line;
+        row.appendChild(typeTag);
+
+        // 整包因果代碼 (Bundle) 按鈕
+        if (item.bundle_count > 0) {
+          const bundleBtn = document.createElement('button');
+          bundleBtn.className = 'btn-bundle-code';
+          bundleBtn.textContent = '📦 關聯 ' + item.bundle_count + ' 函式代碼包';
+          bundleBtn.title = '查看該錨點觸發的所有函式原始碼集合';
+          bundleBtn.onclick = (e) => {
+            e.stopPropagation();
+            showBundle(item, row);
+          };
+          row.appendChild(bundleBtn);
+        }
+
+        // 若錨點本身就是函式且具備源碼，渲染查看按鈕
+        if (funcsData[item.anchor_id]) {
+          const inspectBtn = document.createElement('button');
+          inspectBtn.className = 'btn-action-code';
+          inspectBtn.innerHTML = '💻 查看原始碼';
+          inspectBtn.onclick = (e) => {
+            e.stopPropagation();
+            inspectFunction(item.anchor_id, row);
+          };
+          row.appendChild(inspectBtn);
+        }
+
+        row.onclick = (e) => {
+          if (e.target.tagName !== 'BUTTON') {
+            toggleCollapse(itemEl);
+            if (item.bundle_count > 0) showBundle(item, row);
+            else if (funcsData[item.anchor_id]) inspectFunction(item.anchor_id, row);
+          }
+        };
+
+        itemEl.appendChild(row);
+
+        const subTree = document.createElement('div');
+        subTree.className = 'sub-tree';
+        renderChildren(item.tree.children, subTree);
+        itemEl.appendChild(subTree);
+
+        root.appendChild(itemEl);
+      });
+    }
+
+    function renderChildren(children, parentEl) {
+      if (!children || children.length === 0) return;
+
+      children.forEach(c => {
+        const wrap = document.createElement('div');
+        wrap.className = 'tree-item';
+
+        const row = document.createElement('div');
+        row.className = 'node-row';
+
+        const arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        arrow.textContent = (c.children && c.children.length > 0) ? '▼' : '';
+        row.appendChild(arrow);
+
+        if (c.children && c.children.length > 0) {
+          row.onclick = (e) => {
+            if (e.target.tagName !== 'BUTTON') toggleCollapse(wrap);
+          };
+        }
+
+        if (c.is_await) {
+          const awaitTag = document.createElement('span');
+          awaitTag.className = 'tag-await';
+          awaitTag.textContent = '⏳ await';
+          row.appendChild(awaitTag);
+        }
+
+        if (c.edge_status === 'BLOCKED_SCOPE') {
+          const blockedTag = document.createElement('span');
+          blockedTag.className = 'tag-blocked';
+          blockedTag.textContent = '💥 BLOCKED';
+          row.appendChild(blockedTag);
+        }
+
+        const nameTag = document.createElement('span');
+        if (c.category === 'EVENT_BINDING') {
+          nameTag.className = 'tag-event';
+          nameTag.textContent = '⚡ ' + c.label;
+        } else if (c.category === 'FUNCTION_DEF') {
+          nameTag.className = 'tag-func';
+          nameTag.textContent = '🔒 ' + c.label + '()';
+          row.onclick = (e) => {
+            if (e.target.tagName !== 'BUTTON') {
+              if (c.has_code) inspectFunction(c.id, row);
+              if (c.children && c.children.length > 0) toggleCollapse(wrap);
+            }
+          };
+        } else {
+          nameTag.textContent = c.label;
+        }
+        row.appendChild(nameTag);
+
+        // 如果是函式節點且具備代碼，渲染查看原始碼按鈕
+        if (c.has_code) {
+          const inspectBtn = document.createElement('button');
+          inspectBtn.className = 'btn-action-code';
+          inspectBtn.innerHTML = '💻 查看原始碼';
+          inspectBtn.onclick = (e) => {
+            e.stopPropagation();
+            inspectFunction(c.id, row);
+          };
+          row.appendChild(inspectBtn);
+        }
+
+        wrap.appendChild(row);
+
+        if (c.children && c.children.length > 0) {
+          const sub = document.createElement('div');
+          sub.className = 'sub-tree';
+          renderChildren(c.children, sub);
+          wrap.appendChild(sub);
+        }
+
+        parentEl.appendChild(wrap);
+      });
+    }
+
+    function toggleCollapse(el) {
+      el.classList.toggle('collapsed');
+    }
+
+    function inspectFunction(funcId, rowEl) {
+      document.querySelectorAll('.node-row').forEach(r => r.classList.remove('active'));
+      if (rowEl) rowEl.classList.add('active');
+
+      const meta = funcsData[funcId];
+      if (!meta) return;
+
+      currentSourceCode = meta.source_code;
+      document.getElementById('panelTitle').textContent = '💻 函式實作: ' + meta.label + '()';
+      document.getElementById('copyCodeBtn').style.display = 'block';
+
+      const panel = document.getElementById('inspectorContent');
+      panel.innerHTML = `
+        <div class="code-meta">
+          <div><strong>函式簽章:</strong> <span style="color:var(--primary)">${escapeHtml(meta.signature)}</span></div>
+          <div><strong>精確範圍:</strong> L${meta.line_start} ~ L${meta.line_end} (共 ${meta.line_count} 行)</div>
+          <div><strong>執行型別:</strong> ${meta.is_async ? '⚡ async function (非同步 Promise)' : '同步一般函式'}</div>
+          <div><strong>作用空間:</strong> ${escapeHtml(meta.scope_id)}</div>
+        </div>
+        <div class="code-box">${escapeHtml(meta.source_code)}</div>
+      `;
+    }
+
+    function showBundle(item, rowEl) {
+      document.querySelectorAll('.node-row').forEach(r => r.classList.remove('active'));
+      if (rowEl) rowEl.classList.add('active');
+
+      currentSourceCode = item.bundle_text;
+      document.getElementById('panelTitle').textContent = '📦 ' + item.label + ' 因果代碼包 (共 ' + item.bundle_count + ' 函式)';
+      document.getElementById('copyCodeBtn').style.display = 'block';
+
+      const panel = document.getElementById('inspectorContent');
+      panel.innerHTML = `
+        <div class="code-meta">
+          <div><strong>錨點/入口:</strong> <span style="color:var(--primary)">${escapeHtml(item.label)} (${escapeHtml(item.ui_type)})</span></div>
+          <div><strong>關聯函式:</strong> 共 ${item.bundle_count} 個呼叫實作函式已由 NetworkX 打包</div>
+        </div>
+        <div class="code-box">${escapeHtml(item.bundle_text)}</div>
+      `;
+    }
+
+    function copyCode() {
+      if (currentSourceCode) {
+        navigator.clipboard.writeText(currentSourceCode);
+        const btn = document.getElementById('copyCodeBtn');
+        const orig = btn.textContent;
+        btn.textContent = '✅ 已複製！';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      }
+    }
+
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function filterTree() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      document.querySelectorAll('#treeRoot > .tree-item').forEach(el => {
+        const text = el.textContent.toLowerCase();
+        if (!query || text.includes(query)) {
+          el.style.display = 'block';
+        } else {
+          el.style.display = 'none';
+        }
+      });
+    }
+
+    // 初始化渲染
+    renderTree();
+
+    // 預設高亮第一個錨點或優先選擇核心函式
+    if (uiData.length > 0) {
+      let defaultIdx = 0;
+      const targetIdx = uiData.findIndex(d => d.label.includes('Delete') || d.label.includes('main') || d.label.includes('clean_text') || d.label.includes('safe_parse'));
+      if (targetIdx !== -1) defaultIdx = targetIdx;
+
+      const targetItem = uiData[defaultIdx];
+      const targetRow = document.getElementById('row-anchor-' + defaultIdx);
+      if (targetItem.bundle_count > 0) {
+        showBundle(targetItem, targetRow);
+      } else if (funcsData[targetItem.anchor_id]) {
+        inspectFunction(targetItem.anchor_id, targetRow);
+      }
+    }
+  </script>
+</body>
+</html>
