@@ -18,6 +18,7 @@ def main():
     parser.add_argument("--slice", help="針對特定 UI 錨點 (Anchor ID) 進行前向圖切片")
     parser.add_argument("--bundle", help="以特定 UI 控制項 (Anchor ID 或 Label) 為起點，提取其波及的全部函式真實原始碼包")
     parser.add_argument("--check", action="store_true", help="執行形式化不變量守衛檢驗，有違規時返回非 0 狀態碼")
+    parser.add_argument("--html", help="導出互動式 HTML 雙欄視覺化儀表板檔案路徑")
     parser.add_argument("--list-languages", action="store_true", help="列出目前所有已支援的程式語言與副檔名")
     
     # 差分專用參數
@@ -109,6 +110,12 @@ def main():
             with open(args.export_json, "w", encoding="utf-8") as f:
                 f.write(graph.to_json(indent=2))
             print(f"\n📦 Node-Link JSON 已導出至: {args.export_json}")
+
+        if args.html:
+            from uia_coder.reporters.html_reporter import HTMLDashboardReporter
+            reporter = HTMLDashboardReporter()
+            out_path = reporter.generate(graph, args.html, file_path=args.file)
+            print(f"\n🌲 [HTML 雙欄因果儀表板已輸出至]: {out_path}")
 
         if args.check and not inv["passed"]:
             sys.exit(1)
