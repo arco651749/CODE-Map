@@ -71,8 +71,12 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
             }
 
             func_node_id = f"func:{func_name}@{file_path}:L{start_line}"
-            # 判斷是否為 async def
             is_async = (node.children[0].type == "async" if node.children else False)
+            params_node = node.child_by_field_name("parameters")
+            param_text = params_node.text.decode("utf-8") if params_node else "()"
+            full_text = node.text.decode("utf-8")
+            sig_text = full_text.split(":")[0].strip() if ":" in full_text else full_text.split("\n")[0].strip()
+            end_line = node.end_point[0] + 1
 
             scopes[current_scope_id]["defs"][func_name] = {
                 "node_id": func_node_id,
@@ -80,6 +84,8 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
                 "inner_scope": new_scope_id,
                 "line": start_line,
                 "is_async": is_async,
+                "signature": sig_text,
+                "parameters": param_text,
             }
 
             graph.add_node_rich(
@@ -87,7 +93,16 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
                 label=func_name,
                 category="FUNCTION_DEF",
                 scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line},
-                props={"is_async": is_async, "inner_scope": new_scope_id}
+                props={
+                    "is_async": is_async,
+                    "inner_scope": new_scope_id,
+                    "signature": sig_text,
+                    "parameters": param_text,
+                    "line_start": start_line,
+                    "line_end": end_line,
+                    "line_count": end_line - start_line + 1,
+                    "source_code": full_text,
+                }
             )
 
             next_scope_id = new_scope_id

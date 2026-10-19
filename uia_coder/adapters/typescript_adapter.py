@@ -74,6 +74,11 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             }
 
             is_async = (b"async" in node.children[0].text if node.children else False)
+            params_node = node.child_by_field_name("parameters")
+            param_text = params_node.text.decode("utf-8") if params_node else "()"
+            full_text = node.text.decode("utf-8")
+            sig_text = full_text.split("{")[0].strip() if "{" in full_text else full_text.split("\n")[0].strip()
+            end_line = node.end_point[0] + 1
 
             scopes[current_scope_id]["defs"][func_name] = {
                 "node_id": func_node_id,
@@ -81,6 +86,8 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                 "inner_scope": new_scope_id,
                 "line": start_line,
                 "is_async": is_async,
+                "signature": sig_text,
+                "parameters": param_text,
             }
 
             graph.add_node_rich(
@@ -88,7 +95,16 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                 label=func_name,
                 category="FUNCTION_DEF",
                 scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line},
-                props={"is_async": is_async, "inner_scope": new_scope_id}
+                props={
+                    "is_async": is_async,
+                    "inner_scope": new_scope_id,
+                    "signature": sig_text,
+                    "parameters": param_text,
+                    "line_start": start_line,
+                    "line_end": end_line,
+                    "line_count": end_line - start_line + 1,
+                    "source_code": full_text,
+                }
             )
 
             next_scope_id = new_scope_id
@@ -212,7 +228,12 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                 label=f"<{tag_name} onClick>",
                 category="UI_CONTROL",
                 scope={"scope_id": current_scope_id, "file": file_path, "line": line},
-                props={"ui_type": "Button"}
+                props={
+                    "ui_type": "Button",
+                    "source_code": text,
+                    "line_start": line,
+                    "line_end": jsx_node.end_point[0] + 1,
+                }
             )
             evt_id = f"event:{tag_name}.onClick@{file_path}:L{line}"
             graph.add_node_rich(
@@ -220,7 +241,12 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                 label="onClick",
                 category="EVENT_BINDING",
                 scope={"scope_id": current_scope_id, "file": file_path, "line": line},
-                props={"event_name": "click"}
+                props={
+                    "event_name": "click",
+                    "source_code": text,
+                    "line_start": line,
+                    "line_end": jsx_node.end_point[0] + 1,
+                }
             )
             graph.add_edge_rich(
                 source=ctrl_id,
@@ -293,7 +319,12 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                 label=clean_label,
                 category="UI_CONTROL",
                 scope={"scope_id": current_scope_id, "file": file_path, "line": line},
-                props={"ui_type": "Button" if "btn" in obj_name.lower() else "Control"}
+                props={
+                    "ui_type": "Button" if "btn" in obj_name.lower() else "Control",
+                    "source_code": obj_node.text.decode("utf-8") if obj_node else "",
+                    "line_start": line,
+                    "line_end": call_node.end_point[0] + 1,
+                }
             )
 
         event_node_id = f"event:{obj_name}.on('{event_name}')@{file_path}:L{line}"
@@ -302,7 +333,12 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             label=f"on('{event_name}')",
             category="EVENT_BINDING",
             scope={"scope_id": current_scope_id, "file": file_path, "line": line},
-            props={"event_name": event_name}
+            props={
+                "event_name": event_name,
+                "source_code": call_node.text.decode("utf-8"),
+                "line_start": line,
+                "line_end": call_node.end_point[0] + 1,
+            }
         )
 
         graph.add_edge_rich(
@@ -330,6 +366,12 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                 graph=graph,
                 is_direct_trigger=True,
             )
+        elif handler_arg.type in ("arrow_function", "function_expression"):
+            h_line = handler_arg.start_point[0] + 1
+            h_col = handler_arg.start_point[1] + 1
+            arrow_scope_id = f"scope:arrow@{file_path}:L{h_line}C{h_col}"
+            if arrow_scope_id in scopes:
+                scopes[arrow_scope_id]["func_node_id"] = event_node_id
 
     def _resolve_call_site(
         self,

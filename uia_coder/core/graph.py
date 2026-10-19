@@ -136,6 +136,51 @@ class UIACodeGraph:
         sliced.g = sub_g
         return sliced
 
+    def get_node_source(self, node_id: str) -> Optional[str]:
+        """取得特定節點的真實源碼切片"""
+        node_data = self.g.nodes.get(node_id, {})
+        props = node_data.get("props", {})
+        return props.get("source_code")
+
+    def get_node_signature(self, node_id: str) -> Optional[str]:
+        """取得函式節點的宣告簽章"""
+        node_data = self.g.nodes.get(node_id, {})
+        props = node_data.get("props", {})
+        return props.get("signature")
+
+    def to_causal_code_bundle(self, anchor_id: str) -> str:
+        """
+        以特定 UI 錨點為 Root，提取該控制項觸發的所有函式原始碼，
+        打包成高密度、零干擾的 Context 代碼包供 Coding Agent 直接修改。
+        """
+        if anchor_id not in self.g:
+            return f"❌ 找不到錨點節點: {anchor_id}"
+
+        descendants = nx.descendants(self.g, anchor_id)
+        relevant_nodes = [anchor_id] + list(descendants)
+
+        lines = [f"# 📦 CODE-Map 因果切片代碼包: {anchor_id}", ""]
+        seen_sources = set()
+
+        for nid in relevant_nodes:
+            ndata = self.g.nodes.get(nid, {})
+            props = ndata.get("props", {})
+            cat = ndata.get("category", "")
+            src = props.get("source_code")
+
+            if cat == "FUNCTION_DEF" and src and src not in seen_sources:
+                seen_sources.add(src)
+                sig = props.get("signature", ndata.get("label", nid))
+                f_scope = ndata.get("scope", {})
+                line_start = props.get("line_start", f_scope.get("line", "?"))
+                line_end = props.get("line_end", "?")
+                lines.append(f"## 🔹 {sig} ({f_scope.get('file', '')}: L{line_start}~L{line_end})")
+                lines.append("```")
+                lines.append(src)
+                lines.append("```\n")
+
+        return "\n".join(lines)
+
     def check_invariants(self) -> Dict[str, Any]:
         """
         形式化不變量守衛驗收：

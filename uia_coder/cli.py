@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--file", help="目標分析之源碼檔案路徑 (自動依副檔名匹配語言)")
     parser.add_argument("--export-json", help="導出 NetworkX Node-Link JSON 檔案路徑")
     parser.add_argument("--slice", help="針對特定 UI 錨點 (Anchor ID) 進行前向圖切片")
+    parser.add_argument("--bundle", help="以特定 UI 控制項 (Anchor ID 或 Label) 為起點，提取其波及的全部函式真實原始碼包")
     parser.add_argument("--check", action="store_true", help="執行形式化不變量守衛檢驗，有違規時返回非 0 狀態碼")
     parser.add_argument("--list-languages", action="store_true", help="列出目前所有已支援的程式語言與副檔名")
     
@@ -81,6 +82,15 @@ def main():
             code = f.read()
 
         graph = adapter.parse_and_build(code, file_path=args.file)
+
+        if args.bundle:
+            target_id = args.bundle
+            if target_id not in graph.g:
+                candidates = [n for n, d in graph.g.nodes(data=True) if d.get("label") == target_id or target_id in n]
+                if candidates:
+                    target_id = candidates[0]
+            print(graph.to_causal_code_bundle(target_id))
+            return
 
         if args.slice:
             graph = graph.forward_slice(args.slice)
