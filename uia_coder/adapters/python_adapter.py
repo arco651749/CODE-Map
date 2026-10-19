@@ -43,6 +43,43 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
         # 階段 2：識別 UI 控制項 (PyQt/Tkinter)、信號槽連接與呼叫點
         self._wire_ui_and_calls(tree.root_node, "scope:global", scopes, source_code, file_path, graph)
 
+        # 階段 3：若包含 main() 函式，自動註冊 CLI 程式入口錨點
+        main_nodes = [n for n, d in graph.g.nodes(data=True) if d.get("label") == "main"]
+        if main_nodes:
+            main_nid = main_nodes[0]
+            m_scope = graph.g.nodes[main_nid].get("scope", {})
+            m_line = m_scope.get("line", 1)
+            entry_id = f"ctrl:CLI:main@{file_path}:L{m_line}"
+            graph.add_node_rich(
+                node_id=entry_id,
+                label="#CLI: main",
+                category="UI_CONTROL",
+                scope={"scope_id": "scope:global", "file": file_path, "line": m_line},
+                props={"ui_type": "CLI Entry", "source_code": "def main():", "line_start": m_line, "line_end": m_line}
+            )
+            evt_id = f"event:CLI.run@{file_path}:L{m_line}"
+            graph.add_node_rich(
+                node_id=evt_id,
+                label="run()",
+                category="EVENT_BINDING",
+                scope={"scope_id": "scope:global", "file": file_path, "line": m_line},
+                props={"event_name": "run", "source_code": "if __name__ == '__main__': main()", "line_start": m_line, "line_end": m_line}
+            )
+            graph.add_edge_rich(
+                source=entry_id,
+                target=evt_id,
+                edge_type="WIRES_TO",
+                status="VALID",
+                detail="CLI 命令列入口執行"
+            )
+            graph.add_edge_rich(
+                source=evt_id,
+                target=main_nid,
+                edge_type="TRIGGERS",
+                status="VALID",
+                detail="觸發 main() 流程"
+            )
+
         return graph
 
     def _collect_scopes_and_functions(
@@ -56,21 +93,53 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
     ):
         next_scope_id = current_scope_id
 
-        if node.type == "function_definition":
+        if node.type == "class_definition":
             name_node = node.child_by_field_name("name")
-            func_name = name_node.text.decode("utf-8") if name_node else "anonymous"
+            class_name = name_node.text.decode("utf-8") if name_node else "AnonymousClass"
             start_line = node.start_point[0] + 1
-            new_scope_id = f"scope:{func_name}@{file_path}:L{start_line}"
+            new_scope_id = f"scope:{class_name}@{file_path}:L{start_line}"
             depth = scopes[current_scope_id]["depth"] + 1
 
             scopes[new_scope_id] = {
                 "id": new_scope_id,
                 "parent": current_scope_id,
                 "depth": depth,
-                "defs": {}
+                "defs": {},
+                "class_name": class_name,
+            }
+            # 同時在父作用域註冊該類別建構子
+            class_node_id = f"class:{class_name}@{file_path}:L{start_line}"
+            scopes[current_scope_id]["defs"][class_name] = {
+                "node_id": class_node_id,
+                "declared_scope": current_scope_id,
+                "inner_scope": new_scope_id,
+                "line": start_line,
+                "is_async": False,
+                "signature": f"class {class_name}",
+            }
+            next_scope_id = new_scope_id
+
+        elif node.type == "function_definition":
+            name_node = node.child_by_field_name("name")
+            func_name = name_node.text.decode("utf-8") if name_node else "anonymous"
+            start_line = node.start_point[0] + 1
+            
+            # 若身處類別內部，標註為 Class.Method
+            cls_name = scopes[current_scope_id].get("class_name")
+            full_label = f"{cls_name}.{func_name}" if cls_name else func_name
+
+            new_scope_id = f"scope:{full_label}@{file_path}:L{start_line}"
+            depth = scopes[current_scope_id]["depth"] + 1
+
+            scopes[new_scope_id] = {
+                "id": new_scope_id,
+                "parent": current_scope_id,
+                "depth": depth,
+                "defs": {},
+                "class_name": cls_name,
             }
 
-            func_node_id = f"func:{func_name}@{file_path}:L{start_line}"
+            func_node_id = f"func:{full_label}@{file_path}:L{start_line}"
             is_async = (node.children[0].type == "async" if node.children else False)
             params_node = node.child_by_field_name("parameters")
             param_text = params_node.text.decode("utf-8") if params_node else "()"
@@ -87,10 +156,12 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
                 "signature": sig_text,
                 "parameters": param_text,
             }
+            if cls_name:
+                scopes[current_scope_id]["defs"][full_label] = scopes[current_scope_id]["defs"][func_name]
 
             graph.add_node_rich(
                 node_id=func_node_id,
-                label=func_name,
+                label=full_label,
                 category="FUNCTION_DEF",
                 scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line},
                 props={
@@ -121,19 +192,29 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
     ):
         next_scope_id = current_scope_id
 
-        if node.type == "function_definition":
+        if node.type == "class_definition":
+            name_node = node.child_by_field_name("name")
+            class_name = name_node.text.decode("utf-8") if name_node else "AnonymousClass"
+            start_line = node.start_point[0] + 1
+            next_scope_id = f"scope:{class_name}@{file_path}:L{start_line}"
+
+        elif node.type == "function_definition":
             name_node = node.child_by_field_name("name")
             func_name = name_node.text.decode("utf-8") if name_node else "anonymous"
             start_line = node.start_point[0] + 1
-            next_scope_id = f"scope:{func_name}@{file_path}:L{start_line}"
+            cls_name = scopes.get(current_scope_id, {}).get("class_name")
+            full_label = f"{cls_name}.{func_name}" if cls_name else func_name
+            next_scope_id = f"scope:{full_label}@{file_path}:L{start_line}"
 
-        # 1. 偵測 Python UI 控制項賦值 (例如: self.btn_delete = QPushButton("刪除") 或 btn = Button(...))
+        # 1. 偵測 Python UI 控制項賦值 (嚴格要求右側為呼叫表達式，且調用 GUI 類別)
         if node.type == "assignment":
             left_node = node.child_by_field_name("left")
             right_node = node.child_by_field_name("right")
-            if left_node and right_node:
-                right_text = right_node.text.decode("utf-8")
-                if any(k in right_text for k in ("QPushButton", "Button", "Action", "QAction")):
+            if left_node and right_node and right_node.type == "call":
+                fn_child = right_node.child_by_field_name("function")
+                callee_text = fn_child.text.decode("utf-8") if fn_child else ""
+                widget_types = ("QPushButton", "QAction", "QWidget", "QMainWindow", "Button", "tk.Button", "ttk.Button")
+                if any(w in callee_text for w in widget_types):
                     ctrl_name = left_node.text.decode("utf-8").replace("self.", "")
                     line = node.start_point[0] + 1
                     ctrl_id = f"ctrl:{ctrl_name}@{file_path}:L{line}"
@@ -142,16 +223,38 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
                         label=f"#{ctrl_name}",
                         category="UI_CONTROL",
                         scope={"scope_id": next_scope_id, "file": file_path, "line": line},
-                        props={"ui_type": "Button" if "btn" in ctrl_name.lower() or "button" in right_text.lower() else "Control"}
+                        props={
+                            "ui_type": "Button" if "btn" in ctrl_name.lower() or "button" in callee_text.lower() else "Control",
+                            "source_code": node.text.decode("utf-8"),
+                            "line_start": line,
+                            "line_end": node.end_point[0] + 1,
+                        }
                     )
 
-        # 2. 偵測信號槽連接: btn.clicked.connect(handler) 或 btn.clicked.connect(self.handler)
+        # 2. 偵測呼叫點 (包含屬性方法調用與信號槽連接)
         if node.type == "call":
             func_node = node.child_by_field_name("function")
-            if func_node and func_node.type == "attribute":
-                attr_name = func_node.child_by_field_name("attribute")
-                if attr_name and attr_name.text.decode("utf-8") == "connect":
-                    self._handle_pyqt_connect(node, func_node, next_scope_id, scopes, file_path, graph)
+            if func_node:
+                line = node.start_point[0] + 1
+                parent_node = self._find_enclosing_node_id(next_scope_id, graph)
+
+                if func_node.type == "attribute":
+                    attr_name = func_node.child_by_field_name("attribute")
+                    attr_text = attr_name.text.decode("utf-8") if attr_name else ""
+                    if attr_text == "connect":
+                        self._handle_pyqt_connect(node, func_node, next_scope_id, scopes, file_path, graph)
+                    elif attr_text not in ("append", "extend", "get", "split", "strip", "join", "format", "replace", "startswith", "endswith", "items", "keys", "values", "pop", "insert", "write", "read"):
+                        # 方法調用 (例如: self.get_git_diff() 或 analyzer.analyze())
+                        self._link_handler_with_reachability(
+                            caller_id=parent_node or f"scope:{next_scope_id}",
+                            callee_name=attr_text,
+                            call_scope_id=next_scope_id,
+                            scopes=scopes,
+                            file_path=file_path,
+                            line=line,
+                            graph=graph,
+                            is_direct_trigger=False,
+                        )
 
         # 3. 偵測呼叫點與危害 (time.sleep, 等)
         if node.type == "call":
@@ -317,23 +420,36 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
         else:
             isolated_def = None
             isolated_scope_id = None
+            is_class_method = False
             for s_id, s_data in scopes.items():
                 if callee_name in s_data.get("defs", {}):
                     isolated_def = s_data["defs"][callee_name]
                     isolated_scope_id = s_id
+                    if s_data.get("class_name"):
+                        is_class_method = True
                     break
 
             if isolated_def:
                 target_node_id = isolated_def["node_id"]
                 if caller_id in graph.g and target_node_id in graph.g:
-                    graph.add_edge_rich(
-                        source=caller_id,
-                        target=target_node_id,
-                        edge_type=edge_type,
-                        flow_type=flow_type,
-                        status="BLOCKED_SCOPE",
-                        detail=f"💥 作用域阻隔: 函式 '{callee_name}' 被深鎖在內部閉包 ({isolated_scope_id})，外部無法調用！"
-                    )
+                    if is_class_method:
+                        graph.add_edge_rich(
+                            source=caller_id,
+                            target=target_node_id,
+                            edge_type=edge_type,
+                            flow_type=flow_type,
+                            status="VALID",
+                            detail=f"呼叫類別實例方法 ({isolated_scope_id})"
+                        )
+                    else:
+                        graph.add_edge_rich(
+                            source=caller_id,
+                            target=target_node_id,
+                            edge_type=edge_type,
+                            flow_type=flow_type,
+                            status="BLOCKED_SCOPE",
+                            detail=f"💥 作用域阻隔: 函式 '{callee_name}' 被深鎖在內部閉包 ({isolated_scope_id})，外部無法調用！"
+                        )
             else:
                 unresolved_id = f"func:{callee_name}@external"
                 if unresolved_id not in graph.g:
