@@ -36,6 +36,7 @@ class UIAGraphDiffResult:
         invariants_after: Dict[str, Any],
         canon_map_b: Dict[str, str],
         canon_map_a: Dict[str, str],
+        functions_modified: Optional[List[Dict[str, Any]]] = None,
     ):
         self.g_before = g_before
         self.g_after = g_after
@@ -48,6 +49,7 @@ class UIAGraphDiffResult:
         self.invariants_after = invariants_after
         self.canon_map_b = canon_map_b
         self.canon_map_a = canon_map_a
+        self.functions_modified = functions_modified or []
 
     @property
     def passed(self) -> bool:
@@ -186,6 +188,32 @@ class UIAGraphDiffResult:
 
                 self._render_dual_subtree(v_b, v_a, lines, indent + "    ", visited=visited)
 
+    def to_function_code_diff_markdown(self) -> str:
+        """輸出修改前後函式真實原始碼對照包，專供 AI Agent 進行語意功能比對"""
+        if not self.functions_modified:
+            return "_無任何現存函式發生實作變更_"
+
+        lines = ["## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)", ""]
+        for fn in self.functions_modified:
+            label = fn["label"]
+            lb_start, lb_end = fn["lines_before"]
+            la_start, la_end = fn["lines_after"]
+            lines.append(f"### 🔹 函式: `{label}()`")
+            lines.append(f"- **變更前簽章 (Before)**: `{fn['sig_before']}` (L{lb_start}~L{lb_end})")
+            lines.append(f"- **變更後簽章 (After)**: `{fn['sig_after']}` (L{la_start}~L{la_end})")
+            lines.append("")
+            lines.append("#### ◀️ 變更前實作碼 (Before Implementation):")
+            lines.append("```")
+            lines.append(fn["source_before"])
+            lines.append("```")
+            lines.append("")
+            lines.append("#### ▶️ 變更後實作碼 (After Implementation):")
+            lines.append("```")
+            lines.append(fn["source_after"])
+            lines.append("```")
+            lines.append("")
+        return "\n".join(lines)
+
 
 class UIAGraphDiffer:
     """
@@ -233,6 +261,35 @@ class UIAGraphDiffer:
                     "detail": edges_canon_a[k].get("detail", "")
                 })
 
+        # 4. 函式實作變更檢測 (Function Code Modification Detection)
+        functions_modified = []
+        rev_canon_b = {v: k for k, v in canon_b.items()}
+        rev_canon_a = {v: k for k, v in canon_a.items()}
+
+        for cid in (canon_nodes_b & canon_nodes_a):
+            if cid.startswith("FUNCTION_DEF:"):
+                nid_b = rev_canon_b[cid]
+                nid_a = rev_canon_a[cid]
+                data_b = g_before.g.nodes[nid_b]
+                data_a = g_after.g.nodes[nid_a]
+                props_b = data_b.get("props", {})
+                props_a = data_a.get("props", {})
+                src_b = props_b.get("source_code", "").strip()
+                src_a = props_a.get("source_code", "").strip()
+                if src_b and src_a and src_b != src_a:
+                    f_scope_b = data_b.get("scope", {})
+                    f_scope_a = data_a.get("scope", {})
+                    functions_modified.append({
+                        "canonical_id": cid,
+                        "label": data_a.get("label", cid.split(":", 1)[-1]),
+                        "sig_before": props_b.get("signature", data_b.get("label", "")),
+                        "sig_after": props_a.get("signature", data_a.get("label", "")),
+                        "lines_before": (props_b.get("line_start", f_scope_b.get("line", "?")), props_b.get("line_end", "?")),
+                        "lines_after": (props_a.get("line_start", f_scope_a.get("line", "?")), props_a.get("line_end", "?")),
+                        "source_before": src_b,
+                        "source_after": src_a,
+                    })
+
         inv_b = g_before.check_invariants()
         inv_a = g_after.check_invariants()
 
@@ -248,6 +305,7 @@ class UIAGraphDiffer:
             invariants_after=inv_a,
             canon_map_b=canon_b,
             canon_map_a=canon_a,
+            functions_modified=functions_modified,
         )
 
     @classmethod
