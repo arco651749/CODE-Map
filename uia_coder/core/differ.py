@@ -76,29 +76,29 @@ class UIAGraphDiffResult:
         all_canon_anchors = sorted(set(anchors_b.keys()) | set(anchors_a.keys()))
 
         if not all_canon_anchors:
-            return "_無任何 UI 控制項變更_"
+            lines.append("  _無任何 UI 控制項變更_")
+        else:
+            for canon_id in all_canon_anchors:
+                in_b = canon_id in anchors_b
+                in_a = canon_id in anchors_a
 
-        for canon_id in all_canon_anchors:
-            in_b = canon_id in anchors_b
-            in_a = canon_id in anchors_a
-
-            if in_a and not in_b:
-                node_a = anchors_a[canon_id]
-                data = self.g_after.g.nodes[node_a]
-                lines.append(f"+ 🌲 **{data.get('label', canon_id)}** `({data.get('props', {}).get('ui_type', 'Control')})` [新增控制項]")
-                self._render_graph_subtree(self.g_after, node_a, lines, indent="  ", prefix="+ ")
-            elif in_b and not in_a:
-                node_b = anchors_b[canon_id]
-                data = self.g_before.g.nodes[node_b]
-                lines.append(f"- 🌲 **{data.get('label', canon_id)}** `({data.get('props', {}).get('ui_type', 'Control')})` [刪除控制項]")
-                self._render_graph_subtree(self.g_before, node_b, lines, indent="  ", prefix="- ")
-            else:
-                # 前後都有，比對其因果樹分支
-                node_b = anchors_b[canon_id]
-                node_a = anchors_a[canon_id]
-                data = self.g_after.g.nodes[node_a]
-                lines.append(f"  🌲 **{data.get('label', canon_id)}** `({data.get('props', {}).get('ui_type', 'Control')})`")
-                self._render_dual_subtree(node_b, node_a, lines, indent="  ")
+                if in_a and not in_b:
+                    node_a = anchors_a[canon_id]
+                    data = self.g_after.g.nodes[node_a]
+                    lines.append(f"+ 🌲 **{data.get('label', canon_id)}** `({data.get('props', {}).get('ui_type', 'Control')})` [新增控制項]")
+                    self._render_graph_subtree(self.g_after, node_a, lines, indent="  ", prefix="+ ")
+                elif in_b and not in_a:
+                    node_b = anchors_b[canon_id]
+                    data = self.g_before.g.nodes[node_b]
+                    lines.append(f"- 🌲 **{data.get('label', canon_id)}** `({data.get('props', {}).get('ui_type', 'Control')})` [刪除控制項]")
+                    self._render_graph_subtree(self.g_before, node_b, lines, indent="  ", prefix="- ")
+                else:
+                    # 前後都有，比對其因果樹分支
+                    node_b = anchors_b[canon_id]
+                    node_a = anchors_a[canon_id]
+                    data = self.g_after.g.nodes[node_a]
+                    lines.append(f"  🌲 **{data.get('label', canon_id)}** `({data.get('props', {}).get('ui_type', 'Control')})`")
+                    self._render_dual_subtree(node_b, node_a, lines, indent="  ")
 
         lines.append("\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**")
         if self.status_transitions:
