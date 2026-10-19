@@ -261,11 +261,28 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         event_arg = args_node.children[1]
         event_name = event_arg.text.decode("utf-8").strip("'\"")
         line = call_node.start_point[0] + 1
-        obj_name = obj_node.text.decode("utf-8") if obj_node else "element"
+        obj_name = "element"
+        if obj_node:
+            raw_text = obj_node.text.decode("utf-8")
+            if obj_node.type == "call_expression":
+                # 自動解包 $('id')、getElementById('id')、querySelector('#id')
+                call_args = obj_node.child_by_field_name("arguments")
+                if call_args and call_args.child_count >= 2:
+                    arg_str = call_args.children[1].text.decode("utf-8").strip("'\"`")
+                    if arg_str and not any(c in arg_str for c in "\n\r();"):
+                        obj_name = arg_str.lstrip("#")
+                    else:
+                        obj_name = raw_text
+                else:
+                    obj_name = raw_text
+            else:
+                obj_name = raw_text
+
+        clean_label = f"#{obj_name.lstrip('#')}"
         ctrl_id = None
 
         for n, d in graph.g.nodes(data=True):
-            if d.get("category") == "UI_CONTROL" and (obj_name in n or obj_name in d.get("label", "")):
+            if d.get("category") == "UI_CONTROL" and (obj_name in n or clean_label == d.get("label", "")):
                 ctrl_id = n
                 break
 
@@ -273,7 +290,7 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             ctrl_id = f"ctrl:{obj_name}@{file_path}:L{line}"
             graph.add_node_rich(
                 node_id=ctrl_id,
-                label=f"#{obj_name}",
+                label=clean_label,
                 category="UI_CONTROL",
                 scope={"scope_id": current_scope_id, "file": file_path, "line": line},
                 props={"ui_type": "Button" if "btn" in obj_name.lower() else "Control"}
