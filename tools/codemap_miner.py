@@ -25,7 +25,8 @@ class CodeMapMiner:
 
     DEFAULT_KEYWORDS = [
         "fix", "bug", "error", "scope", "leak", "cleanup",
-        "perf", "optimize", "parallel", "debounce", "throttle"
+        "perf", "optimize", "parallel", "debounce", "throttle",
+        "race", "event", "listener", "double", "re-entran"
     ]
 
     def __init__(self, repo_path: str):
@@ -42,9 +43,10 @@ class CodeMapMiner:
         kw_list = keywords or self.DEFAULT_KEYWORDS
         pattern = "|".join(re.escape(k) for k in kw_list)
 
+        depth = max(500, max_commits * 25)
         cmd = [
             "git", "-C", self.repo_path, "log",
-            f"-n", str(max_commits * 3),
+            "-n", str(depth),
             "--pretty=format:%H%x09%s"
         ]
         res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")

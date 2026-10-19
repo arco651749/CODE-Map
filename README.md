@@ -45,6 +45,63 @@ flowchart TD
 
 ---
 
+## 👑 終極架構願景：反向規格驅動的多 Agent 形式化驗收閉環 (Spec-Driven Multi-Agent Closed Loop)
+
+### 💥 為什麼現有 Multi-Agent 系統無法開發複雜軟體？
+當前業界的多 Agent 開發架構（如 AutoGen、CrewAI、ChatDev 等）存在三大致命瓶頸：
+1. **自然語言規格的模糊性**：上位 Agent 給出的文字需求充滿歧義，Subagent 實作時容易產生幻覺，擅自將函式封閉在局部閉包中，或遺漏非同步 `await` 接線。
+2. **大模型「肉眼 Review」的不可靠性**：上位 Agent 拿著 Subagent 寫好的數百行代碼進行文字審查，根本無法靜態識破深層閉包囚禁（`ReferenceError`）與非同步競態死穴。
+3. **單元測試會說謊**：Subagent 寫的單元測試常依賴過度 Mock，單元測試全部綠燈，但組裝回 UI 主幹時一按按鈕依然直接崩潰。
+
+### 🚀 CODE-Map 的反向工業化生產線 (Graph as Contract)
+CODE-Map 的終極目標不是事後被動分析代碼，而是**「反過來做」——以數學有向圖作為多 Agent 協同的不可違抗規格契約**：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Boss as 👑 上位架構 Agent (Architect)
+    participant Spec as 📐 CODE-Map 規格圖譜 (Spec Graph)
+    participant Worker1 as 🛠️ Subagent A (函式單元實作)
+    participant Worker2 as ⚡ Subagent B (事件流程接線)
+    participant Engine as 🌲 CODE-Map 圖譜編譯器
+    participant Differ as ⚖️ UIAGraphDiffer (形式化驗收裁判)
+
+    Boss->>Spec: 1. 規劃架構因果圖譜 (UI Anchor, Event, Call Chain, Invariants)
+    Boss->>Worker1: 2. 派發單元契約 (實作 RPC 函式，規範為 async)
+    Boss->>Worker2: 3. 派發接線契約 (綁定 #btnDelete ➔ on('click') ➔ RPC)
+    
+    par Subagents 並行實作與自測
+        Worker1->>Worker1: 撰寫代碼 + 通過本地單元測試
+        Worker2->>Worker2: 撰寫接線 + 通過本地流程測試
+    end
+
+    Worker1-->>Engine: 4. 提交單元代碼
+    Worker2-->>Engine: 4. 提交接線代碼
+    
+    Engine->>Differ: 5. 自動編譯為 Actual CODE-Map
+    Differ->>Differ: 6. 形式化圖差分: diff(Spec, Actual)
+    
+    alt 💥 發現閉包囚禁 / 遺漏 await / 同步阻塞危害
+        Differ-->>Boss: 🔴 BLOCKED: 精準指出違背的因果邊與檔案行號
+        Boss->>Worker2: 7. 攜帶「精確因果違規報告」原件退回重修 (0 模糊度)
+    else 🟢 100% 吻合規格圖譜且守衛全數通過
+        Differ-->>Boss: 🟢 READY_TO_SHIP: 通電且作用域可達
+        Boss->>Boss: 8. 正式合入主幹發布 (Ship to Production)
+    end
+```
+
+### 🔁 三階段閉環流程：
+1. **規格定義 (Spec Planning)**：
+   * 上位 Agent 規劃出不可違抗的 `Spec CODE-Map`，明確定義 UI 控制項錨點（如 `#btnDelete`）、觸發事件（`on('click')`）、非同步調用鏈與形式化守衛（`NO_SYNC_BLOCKING`、`SCOPE_ACCESSIBLE`）。
+2. **分解派發與並行自測 (Decomposition & Self-Testing)**：
+   * **Subagent A** 專注於底層單元邏輯，自跑單元測試。
+   * **Subagent B** 專注於事件接線與業務流程，自跑流程測試。
+3. **形式化驗收與自動重派修復 (Deterministic Acceptance & Self-Correction)**：
+   * 所有 Subagents 完成代碼後，上位 Agent 調用 CODE-Map 編譯器將聚合源碼抽取為 `Actual CODE-Map`。
+   * 透過 `UIAGraphDiffer` 進行純數學比對。若不符規格或觸發守衛紅牌，上位 Agent **不需要人工介入，直接帶著圖譜違規點將任務退回給責任 Subagent 重新修正**，直到全綠燈放行！
+
+---
+
 ## 📂 專案結構與遷移資產
 
 ```text
@@ -168,5 +225,7 @@ python.exe -X utf8 -m marimo edit ".marimo/394096b1-bc18-40c1-8189-21c4f485bf2d/
 4. [x] **加入 UI 錨點圖切片 (Graph Slicing)**：`forward_slice(anchor_id)` 可從 UI 控制項向下切出受影響的完整因果子圖。
 5. [x] **標準化 Node-Link 序列化**：支援 `to_node_link_data()`，為 MCP Tool 與 Agent 協議提供零成本格式互轉。
 6. [x] **v2 統一互動式雙欄 HTML 儀表板**：支援點擊節點平滑滾動並高亮對應原始碼行號。
-7. [ ] **封裝為 Agent MCP Tool**：提供給 Claude / Gemini 等 Coding Agent 即時調用圖譜與驗收能力。
-8. [ ] **擴充 Dart (Flutter UI) 與 Java/Kotlin 適配器**。
+7. [ ] **實作 Spec-Driven 規格圖譜驗收介面**：`codemap.py --verify-spec <spec.json> --code <code>`，提供上位 Agent 對 Subagents 交付成果的確定性數學驗收。
+8. [ ] **自動化違規診斷與重派修復閉環 (Self-Correction Loop)**：驗收失敗時輸出結構化因果違規報告，上位 Agent 直接退回給責任 Subagent 精準修復。
+9. [ ] **封裝為 Agent MCP Tool**：提供給 Claude / Gemini 等 Coding Agent 即時調用圖譜規劃與驗收能力。
+10. [ ] **擴充 Dart (Flutter UI) 與 Java/Kotlin 適配器**。

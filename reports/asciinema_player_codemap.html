@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>CODE-Map 全景語意因果地圖 - Player.js</title>
+  <style>
+    :root {
+      --bg: #1e1e2e;
+      --card-bg: #252538;
+      --tree-bg: #181825;
+      --border: #313244;
+      --text: #cdd6f4;
+      --text-dim: #a6adc8;
+      --primary: #89b4fa;
+      --accent: #f5c2e7;
+      --success: #a6e3a1;
+      --warning: #f9e2af;
+      --danger: #f38ba8;
+      --code-bg: #11111b;
+      --drawer-bg: #1e1e2e;
+      --btn-bg: #313244;
+      --btn-hover: #45475a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      padding: 16px;
+      line-height: 1.5;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .header h1 {
+      font-size: 19px;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header h1 span {
+      font-size: 13px;
+      color: var(--text-dim);
+      font-weight: normal;
+    }
+    .badge-pass {
+      background: rgba(166, 227, 161, 0.15);
+      color: var(--success);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--success);
+    }
+    .badge-danger {
+      background: rgba(243, 139, 168, 0.15);
+      color: var(--danger);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--danger);
+    }
+    .stats-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      flex: 1;
+    }
+    .stat-val {
+      font-size: 20px;
+      font-weight: bold;
+      color: var(--primary);
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .search-input {
+      flex: 1;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: var(--primary);
+    }
+    .layout {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .tree-col {
+      flex: 1.1;
+      background: var(--tree-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12.5px;
+      overflow-x: auto;
+      max-height: 720px;
+      overflow-y: auto;
+    }
+    .code-col {
+      flex: 0.9;
+      background: var(--drawer-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      position: sticky;
+      top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 720px;
+    }
+    .tree-item {
+      margin-bottom: 4px;
+    }
+    .node-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.1s;
+    }
+    .node-row:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .node-row.active {
+      background: rgba(137, 180, 250, 0.2) !important;
+      border-left: 3px solid var(--primary);
+    }
+    .tag-ctrl {
+      color: #89dceb;
+      font-weight: 700;
+    }
+    .tag-btn {
+      color: #89b4fa;
+      font-weight: 700;
+      background: rgba(137, 180, 250, 0.15);
+      padding: 1px 7px;
+      border-radius: 4px;
+      border: 1px solid rgba(137, 180, 250, 0.3);
+    }
+    .tag-event {
+      color: #f9e2af;
+      font-weight: 600;
+    }
+    .tag-func {
+      color: #a6e3a1;
+      font-weight: 600;
+    }
+    .tag-await {
+      color: #fab387;
+      font-size: 10px;
+      font-weight: bold;
+      background: rgba(250, 179, 135, 0.15);
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+    .tag-blocked {
+      color: #f38ba8;
+      font-size: 10px;
+      font-weight: bold;
+      background: rgba(243, 139, 168, 0.15);
+      padding: 0 4px;
+      border-radius: 3px;
+      border: 1px solid var(--danger);
+    }
+    .tag-type {
+      font-size: 11px;
+      color: var(--text-dim);
+      background: var(--card-bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    
+    /* 核心操作按鈕 */
+    .btn-action-code {
+      margin-left: auto;
+      background: #89b4fa;
+      color: #11111b;
+      border: none;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      transition: all 0.15s;
+    }
+    .btn-action-code:hover {
+      background: #b4befe;
+      transform: translateY(-1px);
+    }
+    .btn-bundle-code {
+      margin-left: 6px;
+      background: rgba(245, 194, 231, 0.2);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-bundle-code:hover {
+      background: var(--accent);
+      color: #11111b;
+    }
+
+    .sub-tree {
+      margin-left: 18px;
+      border-left: 1px dashed var(--border);
+      padding-left: 8px;
+    }
+    .arrow {
+      color: var(--text-dim);
+      font-size: 10px;
+      display: inline-block;
+      width: 12px;
+      transition: transform 0.15s;
+    }
+    .collapsed > .sub-tree { display: none; }
+    .collapsed > .node-row .arrow { transform: rotate(-90deg); }
+    
+    /* Code Viewer Panel */
+    .code-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--primary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .code-meta {
+      font-size: 12px;
+      color: var(--text);
+      background: var(--card-bg);
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .code-box {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12px;
+      color: #cdd6f4;
+      overflow-y: auto;
+      max-height: 520px;
+      white-space: pre;
+      line-height: 1.45;
+    }
+    .copy-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 3px 9px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .copy-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>🌲 CODE-Map 全景語意因果地圖 <span>(Player.js)</span></h1>
+    <div class="badge-pass">🟢 READY_TO_SHIP</div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-val">1</div>
+      <div class="stat-label">錨點/入口數量 (Anchors)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">94</div>
+      <div class="stat-label">已截取原始碼函式 (NetworkX Props)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--success);">0</div>
+      <div class="stat-label">作用域阻隔 (Scope Errors)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--success);">0</div>
+      <div class="stat-label">危害調用 (Hazards)</div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" id="searchInput" class="search-input" placeholder="🔍 即時搜尋控制項、按鈕、CLI 或函式名稱..." oninput="filterTree()">
+  </div>
+
+  <div class="layout">
+    <div class="tree-col" id="treeRoot">
+      <!-- 樹狀控制項將透過 JavaScript 動態渲染 -->
+    </div>
+
+    <div class="code-col" id="codePanel">
+      <div class="code-title">
+        <span id="panelTitle">💻 程式碼切片檢視器</span>
+        <button class="copy-btn" id="copyCodeBtn" onclick="copyCode()">複製代碼 📋</button>
+      </div>
+      <div id="inspectorContent">
+        <!-- 預設載入首個錨點之代碼 -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const uiData = [{"anchor_id": "ctrl:core@test_repos/asciinema-player/src/components/Player.js:L267", "label": "#core", "ui_type": "Control", "line": 267, "tree": {"id": "ctrl:core@test_repos/asciinema-player/src/components/Player.js:L267", "label": "#core", "category": "UI_CONTROL", "has_code": false, "children": [{"id": "event:core.on('ready')@test_repos/asciinema-player/src/components/Player.js:L267", "label": "on('ready')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCoreReady@external", "label": "onCoreReady (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 ready 事件"}, {"id": "event:core.on('metadata')@test_repos/asciinema-player/src/components/Player.js:L268", "label": "on('metadata')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCoreMetadata@external", "label": "onCoreMetadata (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 metadata 事件"}, {"id": "event:core.on('play')@test_repos/asciinema-player/src/components/Player.js:L269", "label": "on('play')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCorePlay@external", "label": "onCorePlay (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 play 事件"}, {"id": "event:core.on('playing')@test_repos/asciinema-player/src/components/Player.js:L270", "label": "on('playing')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCorePlaying@external", "label": "onCorePlaying (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 playing 事件"}, {"id": "event:core.on('pause')@test_repos/asciinema-player/src/components/Player.js:L271", "label": "on('pause')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCorePause@external", "label": "onCorePause (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 pause 事件"}, {"id": "event:core.on('loading')@test_repos/asciinema-player/src/components/Player.js:L272", "label": "on('loading')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCoreLoading@external", "label": "onCoreLoading (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 loading 事件"}, {"id": "event:core.on('offline')@test_repos/asciinema-player/src/components/Player.js:L273", "label": "on('offline')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCoreOffline@external", "label": "onCoreOffline (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 offline 事件"}, {"id": "event:core.on('muted')@test_repos/asciinema-player/src/components/Player.js:L274", "label": "on('muted')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCoreMuted@external", "label": "onCoreMuted (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 muted 事件"}, {"id": "event:core.on('ended')@test_repos/asciinema-player/src/components/Player.js:L275", "label": "on('ended')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCoreEnded@external", "label": "onCoreEnded (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 ended 事件"}, {"id": "event:core.on('error')@test_repos/asciinema-player/src/components/Player.js:L276", "label": "on('error')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCoreError@external", "label": "onCoreError (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 error 事件"}, {"id": "event:core.on('input')@test_repos/asciinema-player/src/components/Player.js:L277", "label": "on('input')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCoreInput@external", "label": "onCoreInput (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 input 事件"}, {"id": "event:core.on('seeked')@test_repos/asciinema-player/src/components/Player.js:L278", "label": "on('seeked')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCoreSeeked@external", "label": "onCoreSeeked (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 seeked 事件"}, {"id": "event:core.on('reset')@test_repos/asciinema-player/src/components/Player.js:L279", "label": "on('reset')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCoreReset@external", "label": "onCoreReset (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 reset 事件"}, {"id": "event:core.on('resize')@test_repos/asciinema-player/src/components/Player.js:L280", "label": "on('resize')", "category": "EVENT_BINDING", "has_code": false, "children": [{"id": "func:onCoreResize@external", "label": "onCoreResize (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "TRIGGERS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}], "edge_type": "WIRES_TO", "edge_status": "VALID", "is_await": false, "detail": "綁定 resize 事件"}, {"id": "func:debounce@external", "label": "debounce (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:setContainerSize@external", "label": "setContainerSize (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:onMount@external", "label": "onMount (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:setupResizeObserver@external", "label": "setupResizeObserver (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:onCleanup@external", "label": "onCleanup (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:stopTimeUpdates@external", "label": "stopTimeUpdates (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:createMemo@external", "label": "createMemo (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:terminalCols@external", "label": "terminalCols (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:terminalRows@external", "label": "terminalRows (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:containerSize@external", "label": "containerSize (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:isFullscreen@external", "label": "isFullscreen (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:controlBarHeight@external", "label": "controlBarHeight (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:setIsFullscreen@external", "label": "setIsFullscreen (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:isHelpVisible@external", "label": "isHelpVisible (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:setIsHelpVisible@external", "label": "setIsHelpVisible (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:isKeystrokeOverlayEnabled@external", "label": "isKeystrokeOverlayEnabled (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:clearKeystrokes@external", "label": "clearKeystrokes (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:setKeystrokeOverlayEnabled@external", "label": "setKeystrokeOverlayEnabled (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:togglePlay@external", "label": "togglePlay (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:toggleFullscreen@external", "label": "toggleFullscreen (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:toggleMuted@external", "label": "toggleMuted (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:toggleHelp@external", "label": "toggleHelp (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:toggleKeystrokeOverlay@external", "label": "toggleKeystrokeOverlay (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:onUserActive@external", "label": "onUserActive (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:clearInterval@external", "label": "clearInterval (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:setInterval@external", "label": "setInterval (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:batch@external", "label": "batch (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:setCurrentTime@external", "label": "setCurrentTime (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:setRemainingTime@external", "label": "setRemainingTime (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:setProgress@external", "label": "setProgress (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:clearTimeout@external", "label": "clearTimeout (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:setUserActive@external", "label": "setUserActive (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:originalTheme@external", "label": "originalTheme (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:terminalElementSize@external", "label": "terminalElementSize (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:embeddedTheme@external", "label": "embeddedTheme (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:isPlaying@external", "label": "isPlaying (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:isMuted@external", "label": "isMuted (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:controlsVisible@external", "label": "controlsVisible (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:playerClass@external", "label": "playerClass (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:playerStyle@external", "label": "playerStyle (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:terminalScale@external", "label": "terminalScale (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:blinking@external", "label": "blinking (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:duration@external", "label": "duration (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:currentTime@external", "label": "currentTime (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:remainingTime@external", "label": "remainingTime (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:progress@external", "label": "progress (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:markers@external", "label": "markers (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:overlay@external", "label": "overlay (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:isPausable@external", "label": "isPausable (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:isSeekable@external", "label": "isSeekable (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:keystrokes@external", "label": "keystrokes (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:infoMessage@external", "label": "infoMessage (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}, {"id": "func:wasPlaying@external", "label": "wasPlaying (External/Unresolved)", "category": "FUNCTION_DEF", "has_code": false, "children": [], "edge_type": "CALLS", "edge_status": "VALID", "is_await": false, "detail": "引用全域或外部函式"}]}, "bundle_count": 67, "bundle_funcs": ["func:setUserActive@external", "func:isFullscreen@external", "func:onCoreLoading@external", "func:onCoreResize@external", "func:onCorePlay@external", "func:onCleanup@external", "func:toggleMuted@external", "func:onMount@external", "func:toggleFullscreen@external", "func:progress@external", "func:createMemo@external", "func:wasPlaying@external", "func:remainingTime@external", "func:toggleKeystrokeOverlay@external", "func:onCoreReset@external", "func:isSeekable@external", "func:onCoreOffline@external", "func:toggleHelp@external", "func:clearKeystrokes@external", "func:debounce@external", "func:infoMessage@external", "func:setKeystrokeOverlayEnabled@external", "func:isPlaying@external", "func:controlsVisible@external", "func:setInterval@external", "func:setIsFullscreen@external", "func:setIsHelpVisible@external", "func:onCoreReady@external", "func:terminalCols@external", "func:terminalElementSize@external", "func:overlay@external", "func:onCorePause@external", "func:duration@external", "func:isMuted@external", "func:batch@external", "func:playerStyle@external", "func:setProgress@external", "func:onCoreMuted@external", "func:stopTimeUpdates@external", "func:keystrokes@external", "func:containerSize@external", "func:togglePlay@external", "func:onCoreSeeked@external", "func:setupResizeObserver@external", "func:onCoreInput@external", "func:markers@external", "func:onCoreMetadata@external", "func:isHelpVisible@external", "func:originalTheme@external", "func:setContainerSize@external", "func:clearInterval@external", "func:terminalRows@external", "func:clearTimeout@external", "func:blinking@external", "func:onCorePlaying@external", "func:onUserActive@external", "func:isPausable@external", "func:controlBarHeight@external", "func:onCoreError@external", "func:setRemainingTime@external", "func:setCurrentTime@external", "func:embeddedTheme@external", "func:terminalScale@external", "func:onCoreEnded@external", "func:currentTime@external", "func:playerClass@external", "func:isKeystrokeOverlayEnabled@external"], "bundle_text": "# 📦 CODE-Map 因果切片代碼包: ctrl:core@test_repos/asciinema-player/src/components/Player.js:L267\n"}];
+    const funcsData = {"func:onPlaying@test_repos/asciinema-player/src/components/Player.js:L83C3": {"id": "func:onPlaying@test_repos/asciinema-player/src/components/Player.js:L83C3", "label": "onPlaying", "raw_label": "onPlaying", "signature": "function onPlaying()", "parameters": "()", "line_start": 83, "line_end": 86, "line_count": 4, "is_async": false, "source_code": "function onPlaying() {\n    setBlinking(true);\n    startTimeUpdates();\n  }", "scope_id": "scope:global", "class_name": ""}, "func:onStopped@test_repos/asciinema-player/src/components/Player.js:L88C3": {"id": "func:onStopped@test_repos/asciinema-player/src/components/Player.js:L88C3", "label": "onStopped", "raw_label": "onStopped", "signature": "function onStopped()", "parameters": "()", "line_start": 88, "line_end": 92, "line_count": 5, "is_async": false, "source_code": "function onStopped() {\n    setBlinking(false);\n    stopTimeUpdates();\n    updateTime();\n  }", "scope_id": "scope:global", "class_name": ""}, "func:createSignal@external": {"id": "func:createSignal@external", "label": "createSignal (External/Unresolved)", "raw_label": "createSignal (External/Unresolved)", "signature": "createSignal (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:createMemo@external": {"id": "func:createMemo@external", "label": "createMemo (External/Unresolved)", "raw_label": "createMemo (External/Unresolved)", "signature": "createMemo (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:terminalSize@external": {"id": "func:terminalSize@external", "label": "terminalSize (External/Unresolved)", "raw_label": "terminalSize (External/Unresolved)", "signature": "terminalSize (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:userActive@external": {"id": "func:userActive@external", "label": "userActive (External/Unresolved)", "raw_label": "userActive (External/Unresolved)", "signature": "userActive (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setBlinking@external": {"id": "func:setBlinking@external", "label": "setBlinking (External/Unresolved)", "raw_label": "setBlinking (External/Unresolved)", "signature": "setBlinking (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:startTimeUpdates@external": {"id": "func:startTimeUpdates@external", "label": "startTimeUpdates (External/Unresolved)", "raw_label": "startTimeUpdates (External/Unresolved)", "signature": "startTimeUpdates (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:stopTimeUpdates@external": {"id": "func:stopTimeUpdates@external", "label": "stopTimeUpdates (External/Unresolved)", "raw_label": "stopTimeUpdates (External/Unresolved)", "signature": "stopTimeUpdates (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:updateTime@external": {"id": "func:updateTime@external", "label": "updateTime (External/Unresolved)", "raw_label": "updateTime (External/Unresolved)", "signature": "updateTime (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:batch@external": {"id": "func:batch@external", "label": "batch (External/Unresolved)", "raw_label": "batch (External/Unresolved)", "signature": "batch (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setIsPausable@external": {"id": "func:setIsPausable@external", "label": "setIsPausable (External/Unresolved)", "raw_label": "setIsPausable (External/Unresolved)", "signature": "setIsPausable (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setIsSeekable@external": {"id": "func:setIsSeekable@external", "label": "setIsSeekable (External/Unresolved)", "raw_label": "setIsSeekable (External/Unresolved)", "signature": "setIsSeekable (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setDuration@external": {"id": "func:setDuration@external", "label": "setDuration (External/Unresolved)", "raw_label": "setDuration (External/Unresolved)", "signature": "setDuration (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setCurrentTime@external": {"id": "func:setCurrentTime@external", "label": "setCurrentTime (External/Unresolved)", "raw_label": "setCurrentTime (External/Unresolved)", "signature": "setCurrentTime (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setRemainingTime@external": {"id": "func:setRemainingTime@external", "label": "setRemainingTime (External/Unresolved)", "raw_label": "setRemainingTime (External/Unresolved)", "signature": "setRemainingTime (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setProgress@external": {"id": "func:setProgress@external", "label": "setProgress (External/Unresolved)", "raw_label": "setProgress (External/Unresolved)", "signature": "setProgress (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setMarkers@external": {"id": "func:setMarkers@external", "label": "setMarkers (External/Unresolved)", "raw_label": "setMarkers (External/Unresolved)", "signature": "setMarkers (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setIsMuted@external": {"id": "func:setIsMuted@external", "label": "setIsMuted (External/Unresolved)", "raw_label": "setIsMuted (External/Unresolved)", "signature": "setIsMuted (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setTerminalSize@external": {"id": "func:setTerminalSize@external", "label": "setTerminalSize (External/Unresolved)", "raw_label": "setTerminalSize (External/Unresolved)", "signature": "setTerminalSize (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setOriginalTheme@external": {"id": "func:setOriginalTheme@external", "label": "setOriginalTheme (External/Unresolved)", "raw_label": "setOriginalTheme (External/Unresolved)", "signature": "setOriginalTheme (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setOverlay@external": {"id": "func:setOverlay@external", "label": "setOverlay (External/Unresolved)", "raw_label": "setOverlay (External/Unresolved)", "signature": "setOverlay (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setIsPlaying@external": {"id": "func:setIsPlaying@external", "label": "setIsPlaying (External/Unresolved)", "raw_label": "setIsPlaying (External/Unresolved)", "signature": "setIsPlaying (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setWasPlaying@external": {"id": "func:setWasPlaying@external", "label": "setWasPlaying (External/Unresolved)", "raw_label": "setWasPlaying (External/Unresolved)", "signature": "setWasPlaying (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:clearKeystrokes@external": {"id": "func:clearKeystrokes@external", "label": "clearKeystrokes (External/Unresolved)", "raw_label": "clearKeystrokes (External/Unresolved)", "signature": "clearKeystrokes (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setInfoMessage@external": {"id": "func:setInfoMessage@external", "label": "setInfoMessage (External/Unresolved)", "raw_label": "setInfoMessage (External/Unresolved)", "signature": "setInfoMessage (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:isKeystrokeOverlayEnabled@external": {"id": "func:isKeystrokeOverlayEnabled@external", "label": "isKeystrokeOverlayEnabled (External/Unresolved)", "raw_label": "isKeystrokeOverlayEnabled (External/Unresolved)", "signature": "isKeystrokeOverlayEnabled (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:formatKeystroke@external": {"id": "func:formatKeystroke@external", "label": "formatKeystroke (External/Unresolved)", "raw_label": "formatKeystroke (External/Unresolved)", "signature": "formatKeystroke (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:keystrokes@external": {"id": "func:keystrokes@external", "label": "keystrokes (External/Unresolved)", "raw_label": "keystrokes (External/Unresolved)", "signature": "keystrokes (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setKeystrokes@external": {"id": "func:setKeystrokes@external", "label": "setKeystrokes (External/Unresolved)", "raw_label": "setKeystrokes (External/Unresolved)", "signature": "setKeystrokes (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:createKeystroke@external": {"id": "func:createKeystroke@external", "label": "createKeystroke (External/Unresolved)", "raw_label": "createKeystroke (External/Unresolved)", "signature": "createKeystroke (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:count@external": {"id": "func:count@external", "label": "count (External/Unresolved)", "raw_label": "count (External/Unresolved)", "signature": "count (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:value@external": {"id": "func:value@external", "label": "value (External/Unresolved)", "raw_label": "value (External/Unresolved)", "signature": "value (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setValue@external": {"id": "func:setValue@external", "label": "setValue (External/Unresolved)", "raw_label": "setValue (External/Unresolved)", "signature": "setValue (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setRev@external": {"id": "func:setRev@external", "label": "setRev (External/Unresolved)", "raw_label": "setRev (External/Unresolved)", "signature": "setRev (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setCount@external": {"id": "func:setCount@external", "label": "setCount (External/Unresolved)", "raw_label": "setCount (External/Unresolved)", "signature": "setCount (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCoreReady@external": {"id": "func:onCoreReady@external", "label": "onCoreReady (External/Unresolved)", "raw_label": "onCoreReady (External/Unresolved)", "signature": "onCoreReady (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCoreMetadata@external": {"id": "func:onCoreMetadata@external", "label": "onCoreMetadata (External/Unresolved)", "raw_label": "onCoreMetadata (External/Unresolved)", "signature": "onCoreMetadata (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCorePlay@external": {"id": "func:onCorePlay@external", "label": "onCorePlay (External/Unresolved)", "raw_label": "onCorePlay (External/Unresolved)", "signature": "onCorePlay (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCorePlaying@external": {"id": "func:onCorePlaying@external", "label": "onCorePlaying (External/Unresolved)", "raw_label": "onCorePlaying (External/Unresolved)", "signature": "onCorePlaying (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCorePause@external": {"id": "func:onCorePause@external", "label": "onCorePause (External/Unresolved)", "raw_label": "onCorePause (External/Unresolved)", "signature": "onCorePause (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCoreLoading@external": {"id": "func:onCoreLoading@external", "label": "onCoreLoading (External/Unresolved)", "raw_label": "onCoreLoading (External/Unresolved)", "signature": "onCoreLoading (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCoreOffline@external": {"id": "func:onCoreOffline@external", "label": "onCoreOffline (External/Unresolved)", "raw_label": "onCoreOffline (External/Unresolved)", "signature": "onCoreOffline (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCoreMuted@external": {"id": "func:onCoreMuted@external", "label": "onCoreMuted (External/Unresolved)", "raw_label": "onCoreMuted (External/Unresolved)", "signature": "onCoreMuted (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCoreEnded@external": {"id": "func:onCoreEnded@external", "label": "onCoreEnded (External/Unresolved)", "raw_label": "onCoreEnded (External/Unresolved)", "signature": "onCoreEnded (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCoreError@external": {"id": "func:onCoreError@external", "label": "onCoreError (External/Unresolved)", "raw_label": "onCoreError (External/Unresolved)", "signature": "onCoreError (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCoreInput@external": {"id": "func:onCoreInput@external", "label": "onCoreInput (External/Unresolved)", "raw_label": "onCoreInput (External/Unresolved)", "signature": "onCoreInput (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCoreSeeked@external": {"id": "func:onCoreSeeked@external", "label": "onCoreSeeked (External/Unresolved)", "raw_label": "onCoreSeeked (External/Unresolved)", "signature": "onCoreSeeked (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCoreReset@external": {"id": "func:onCoreReset@external", "label": "onCoreReset (External/Unresolved)", "raw_label": "onCoreReset (External/Unresolved)", "signature": "onCoreReset (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCoreResize@external": {"id": "func:onCoreResize@external", "label": "onCoreResize (External/Unresolved)", "raw_label": "onCoreResize (External/Unresolved)", "signature": "onCoreResize (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:debounce@external": {"id": "func:debounce@external", "label": "debounce (External/Unresolved)", "raw_label": "debounce (External/Unresolved)", "signature": "debounce (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setContainerSize@external": {"id": "func:setContainerSize@external", "label": "setContainerSize (External/Unresolved)", "raw_label": "setContainerSize (External/Unresolved)", "signature": "setContainerSize (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onMount@external": {"id": "func:onMount@external", "label": "onMount (External/Unresolved)", "raw_label": "onMount (External/Unresolved)", "signature": "onMount (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setupResizeObserver@external": {"id": "func:setupResizeObserver@external", "label": "setupResizeObserver (External/Unresolved)", "raw_label": "setupResizeObserver (External/Unresolved)", "signature": "setupResizeObserver (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onCleanup@external": {"id": "func:onCleanup@external", "label": "onCleanup (External/Unresolved)", "raw_label": "onCleanup (External/Unresolved)", "signature": "onCleanup (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:terminalCols@external": {"id": "func:terminalCols@external", "label": "terminalCols (External/Unresolved)", "raw_label": "terminalCols (External/Unresolved)", "signature": "terminalCols (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:terminalRows@external": {"id": "func:terminalRows@external", "label": "terminalRows (External/Unresolved)", "raw_label": "terminalRows (External/Unresolved)", "signature": "terminalRows (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:containerSize@external": {"id": "func:containerSize@external", "label": "containerSize (External/Unresolved)", "raw_label": "containerSize (External/Unresolved)", "signature": "containerSize (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:isFullscreen@external": {"id": "func:isFullscreen@external", "label": "isFullscreen (External/Unresolved)", "raw_label": "isFullscreen (External/Unresolved)", "signature": "isFullscreen (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:controlBarHeight@external": {"id": "func:controlBarHeight@external", "label": "controlBarHeight (External/Unresolved)", "raw_label": "controlBarHeight (External/Unresolved)", "signature": "controlBarHeight (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setIsFullscreen@external": {"id": "func:setIsFullscreen@external", "label": "setIsFullscreen (External/Unresolved)", "raw_label": "setIsFullscreen (External/Unresolved)", "signature": "setIsFullscreen (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:isHelpVisible@external": {"id": "func:isHelpVisible@external", "label": "isHelpVisible (External/Unresolved)", "raw_label": "isHelpVisible (External/Unresolved)", "signature": "isHelpVisible (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setIsHelpVisible@external": {"id": "func:setIsHelpVisible@external", "label": "setIsHelpVisible (External/Unresolved)", "raw_label": "setIsHelpVisible (External/Unresolved)", "signature": "setIsHelpVisible (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setKeystrokeOverlayEnabled@external": {"id": "func:setKeystrokeOverlayEnabled@external", "label": "setKeystrokeOverlayEnabled (External/Unresolved)", "raw_label": "setKeystrokeOverlayEnabled (External/Unresolved)", "signature": "setKeystrokeOverlayEnabled (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:togglePlay@external": {"id": "func:togglePlay@external", "label": "togglePlay (External/Unresolved)", "raw_label": "togglePlay (External/Unresolved)", "signature": "togglePlay (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:toggleFullscreen@external": {"id": "func:toggleFullscreen@external", "label": "toggleFullscreen (External/Unresolved)", "raw_label": "toggleFullscreen (External/Unresolved)", "signature": "toggleFullscreen (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:toggleMuted@external": {"id": "func:toggleMuted@external", "label": "toggleMuted (External/Unresolved)", "raw_label": "toggleMuted (External/Unresolved)", "signature": "toggleMuted (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:toggleHelp@external": {"id": "func:toggleHelp@external", "label": "toggleHelp (External/Unresolved)", "raw_label": "toggleHelp (External/Unresolved)", "signature": "toggleHelp (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:toggleKeystrokeOverlay@external": {"id": "func:toggleKeystrokeOverlay@external", "label": "toggleKeystrokeOverlay (External/Unresolved)", "raw_label": "toggleKeystrokeOverlay (External/Unresolved)", "signature": "toggleKeystrokeOverlay (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:onUserActive@external": {"id": "func:onUserActive@external", "label": "onUserActive (External/Unresolved)", "raw_label": "onUserActive (External/Unresolved)", "signature": "onUserActive (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:clearInterval@external": {"id": "func:clearInterval@external", "label": "clearInterval (External/Unresolved)", "raw_label": "clearInterval (External/Unresolved)", "signature": "clearInterval (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setInterval@external": {"id": "func:setInterval@external", "label": "setInterval (External/Unresolved)", "raw_label": "setInterval (External/Unresolved)", "signature": "setInterval (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:clearTimeout@external": {"id": "func:clearTimeout@external", "label": "clearTimeout (External/Unresolved)", "raw_label": "clearTimeout (External/Unresolved)", "signature": "clearTimeout (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:setUserActive@external": {"id": "func:setUserActive@external", "label": "setUserActive (External/Unresolved)", "raw_label": "setUserActive (External/Unresolved)", "signature": "setUserActive (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:originalTheme@external": {"id": "func:originalTheme@external", "label": "originalTheme (External/Unresolved)", "raw_label": "originalTheme (External/Unresolved)", "signature": "originalTheme (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:terminalElementSize@external": {"id": "func:terminalElementSize@external", "label": "terminalElementSize (External/Unresolved)", "raw_label": "terminalElementSize (External/Unresolved)", "signature": "terminalElementSize (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:embeddedTheme@external": {"id": "func:embeddedTheme@external", "label": "embeddedTheme (External/Unresolved)", "raw_label": "embeddedTheme (External/Unresolved)", "signature": "embeddedTheme (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:isPlaying@external": {"id": "func:isPlaying@external", "label": "isPlaying (External/Unresolved)", "raw_label": "isPlaying (External/Unresolved)", "signature": "isPlaying (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:isMuted@external": {"id": "func:isMuted@external", "label": "isMuted (External/Unresolved)", "raw_label": "isMuted (External/Unresolved)", "signature": "isMuted (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:controlsVisible@external": {"id": "func:controlsVisible@external", "label": "controlsVisible (External/Unresolved)", "raw_label": "controlsVisible (External/Unresolved)", "signature": "controlsVisible (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:playerClass@external": {"id": "func:playerClass@external", "label": "playerClass (External/Unresolved)", "raw_label": "playerClass (External/Unresolved)", "signature": "playerClass (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:playerStyle@external": {"id": "func:playerStyle@external", "label": "playerStyle (External/Unresolved)", "raw_label": "playerStyle (External/Unresolved)", "signature": "playerStyle (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:terminalScale@external": {"id": "func:terminalScale@external", "label": "terminalScale (External/Unresolved)", "raw_label": "terminalScale (External/Unresolved)", "signature": "terminalScale (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:blinking@external": {"id": "func:blinking@external", "label": "blinking (External/Unresolved)", "raw_label": "blinking (External/Unresolved)", "signature": "blinking (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:duration@external": {"id": "func:duration@external", "label": "duration (External/Unresolved)", "raw_label": "duration (External/Unresolved)", "signature": "duration (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:currentTime@external": {"id": "func:currentTime@external", "label": "currentTime (External/Unresolved)", "raw_label": "currentTime (External/Unresolved)", "signature": "currentTime (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:remainingTime@external": {"id": "func:remainingTime@external", "label": "remainingTime (External/Unresolved)", "raw_label": "remainingTime (External/Unresolved)", "signature": "remainingTime (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:progress@external": {"id": "func:progress@external", "label": "progress (External/Unresolved)", "raw_label": "progress (External/Unresolved)", "signature": "progress (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:markers@external": {"id": "func:markers@external", "label": "markers (External/Unresolved)", "raw_label": "markers (External/Unresolved)", "signature": "markers (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:overlay@external": {"id": "func:overlay@external", "label": "overlay (External/Unresolved)", "raw_label": "overlay (External/Unresolved)", "signature": "overlay (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:isPausable@external": {"id": "func:isPausable@external", "label": "isPausable (External/Unresolved)", "raw_label": "isPausable (External/Unresolved)", "signature": "isPausable (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:isSeekable@external": {"id": "func:isSeekable@external", "label": "isSeekable (External/Unresolved)", "raw_label": "isSeekable (External/Unresolved)", "signature": "isSeekable (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:infoMessage@external": {"id": "func:infoMessage@external", "label": "infoMessage (External/Unresolved)", "raw_label": "infoMessage (External/Unresolved)", "signature": "infoMessage (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}, "func:wasPlaying@external": {"id": "func:wasPlaying@external", "label": "wasPlaying (External/Unresolved)", "raw_label": "wasPlaying (External/Unresolved)", "signature": "wasPlaying (External/Unresolved)", "parameters": "()", "line_start": 0, "line_end": 0, "line_count": 1, "is_async": false, "source_code": "", "scope_id": "external", "class_name": ""}};
+
+    let currentSourceCode = "";
+
+    function renderTree() {
+      const root = document.getElementById('treeRoot');
+      root.innerHTML = '';
+
+      uiData.forEach((item, idx) => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'tree-item';
+        itemEl.dataset.label = item.label.toLowerCase();
+        itemEl.id = 'anchor-' + idx;
+
+        const row = document.createElement('div');
+        row.className = 'node-row';
+        row.id = 'row-anchor-' + idx;
+
+        const arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        arrow.textContent = (item.tree.children && item.tree.children.length > 0) ? '▼' : '';
+        row.appendChild(arrow);
+
+        const ctrlTag = document.createElement('span');
+        ctrlTag.className = (item.ui_type === 'Button' || item.ui_type === 'CLI Entry') ? 'tag-btn' : 'tag-ctrl';
+        ctrlTag.textContent = item.label;
+        row.appendChild(ctrlTag);
+
+        const typeTag = document.createElement('span');
+        typeTag.className = 'tag-type';
+        typeTag.textContent = item.ui_type + ' @ L' + item.line;
+        row.appendChild(typeTag);
+
+        // 整包因果代碼 (Bundle) 按鈕
+        if (item.bundle_count > 0) {
+          const bundleBtn = document.createElement('button');
+          bundleBtn.className = 'btn-bundle-code';
+          bundleBtn.textContent = '📦 關聯 ' + item.bundle_count + ' 函式代碼包';
+          bundleBtn.title = '查看該錨點觸發的所有函式原始碼集合';
+          bundleBtn.onclick = (e) => {
+            e.stopPropagation();
+            showBundle(item, row);
+          };
+          row.appendChild(bundleBtn);
+        }
+
+        // 若錨點本身就是函式且具備源碼，渲染查看按鈕
+        if (funcsData[item.anchor_id]) {
+          const inspectBtn = document.createElement('button');
+          inspectBtn.className = 'btn-action-code';
+          inspectBtn.innerHTML = '💻 查看原始碼';
+          inspectBtn.onclick = (e) => {
+            e.stopPropagation();
+            inspectFunction(item.anchor_id, row);
+          };
+          row.appendChild(inspectBtn);
+        }
+
+        row.onclick = (e) => {
+          if (e.target.tagName !== 'BUTTON') {
+            toggleCollapse(itemEl);
+            if (item.bundle_count > 0) showBundle(item, row);
+            else if (funcsData[item.anchor_id]) inspectFunction(item.anchor_id, row);
+          }
+        };
+
+        itemEl.appendChild(row);
+
+        const subTree = document.createElement('div');
+        subTree.className = 'sub-tree';
+        renderChildren(item.tree.children, subTree);
+        itemEl.appendChild(subTree);
+
+        root.appendChild(itemEl);
+      });
+    }
+
+    function renderChildren(children, parentEl) {
+      if (!children || children.length === 0) return;
+
+      children.forEach(c => {
+        const wrap = document.createElement('div');
+        wrap.className = 'tree-item';
+
+        const row = document.createElement('div');
+        row.className = 'node-row';
+
+        const arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        arrow.textContent = (c.children && c.children.length > 0) ? '▼' : '';
+        row.appendChild(arrow);
+
+        if (c.children && c.children.length > 0) {
+          row.onclick = (e) => {
+            if (e.target.tagName !== 'BUTTON') toggleCollapse(wrap);
+          };
+        }
+
+        if (c.is_await) {
+          const awaitTag = document.createElement('span');
+          awaitTag.className = 'tag-await';
+          awaitTag.textContent = '⏳ await';
+          row.appendChild(awaitTag);
+        }
+
+        if (c.edge_status === 'BLOCKED_SCOPE') {
+          const blockedTag = document.createElement('span');
+          blockedTag.className = 'tag-blocked';
+          blockedTag.textContent = '💥 BLOCKED';
+          row.appendChild(blockedTag);
+        }
+
+        const nameTag = document.createElement('span');
+        if (c.category === 'EVENT_BINDING') {
+          nameTag.className = 'tag-event';
+          nameTag.textContent = '⚡ ' + c.label;
+        } else if (c.category === 'FUNCTION_DEF') {
+          nameTag.className = 'tag-func';
+          nameTag.textContent = '🔒 ' + c.label + '()';
+          row.onclick = (e) => {
+            if (e.target.tagName !== 'BUTTON') {
+              if (c.has_code) inspectFunction(c.id, row);
+              if (c.children && c.children.length > 0) toggleCollapse(wrap);
+            }
+          };
+        } else {
+          nameTag.textContent = c.label;
+        }
+        row.appendChild(nameTag);
+
+        // 如果是函式節點且具備代碼，渲染查看原始碼按鈕
+        if (c.has_code) {
+          const inspectBtn = document.createElement('button');
+          inspectBtn.className = 'btn-action-code';
+          inspectBtn.innerHTML = '💻 查看原始碼';
+          inspectBtn.onclick = (e) => {
+            e.stopPropagation();
+            inspectFunction(c.id, row);
+          };
+          row.appendChild(inspectBtn);
+        }
+
+        wrap.appendChild(row);
+
+        if (c.children && c.children.length > 0) {
+          const sub = document.createElement('div');
+          sub.className = 'sub-tree';
+          renderChildren(c.children, sub);
+          wrap.appendChild(sub);
+        }
+
+        parentEl.appendChild(wrap);
+      });
+    }
+
+    function toggleCollapse(el) {
+      el.classList.toggle('collapsed');
+    }
+
+    function inspectFunction(funcId, rowEl) {
+      document.querySelectorAll('.node-row').forEach(r => r.classList.remove('active'));
+      if (rowEl) rowEl.classList.add('active');
+
+      const meta = funcsData[funcId];
+      if (!meta) return;
+
+      currentSourceCode = meta.source_code;
+      document.getElementById('panelTitle').textContent = '💻 函式實作: ' + meta.label + '()';
+      document.getElementById('copyCodeBtn').style.display = 'block';
+
+      const panel = document.getElementById('inspectorContent');
+      panel.innerHTML = `
+        <div class="code-meta">
+          <div><strong>函式簽章:</strong> <span style="color:var(--primary)">${escapeHtml(meta.signature)}</span></div>
+          <div><strong>精確範圍:</strong> L${meta.line_start} ~ L${meta.line_end} (共 ${meta.line_count} 行)</div>
+          <div><strong>執行型別:</strong> ${meta.is_async ? '⚡ async function (非同步 Promise)' : '同步一般函式'}</div>
+          <div><strong>作用空間:</strong> ${escapeHtml(meta.scope_id)}</div>
+        </div>
+        <div class="code-box">${escapeHtml(meta.source_code)}</div>
+      `;
+    }
+
+    function showBundle(item, rowEl) {
+      document.querySelectorAll('.node-row').forEach(r => r.classList.remove('active'));
+      if (rowEl) rowEl.classList.add('active');
+
+      currentSourceCode = item.bundle_text;
+      document.getElementById('panelTitle').textContent = '📦 ' + item.label + ' 因果代碼包 (共 ' + item.bundle_count + ' 函式)';
+      document.getElementById('copyCodeBtn').style.display = 'block';
+
+      const panel = document.getElementById('inspectorContent');
+      panel.innerHTML = `
+        <div class="code-meta">
+          <div><strong>錨點/入口:</strong> <span style="color:var(--primary)">${escapeHtml(item.label)} (${escapeHtml(item.ui_type)})</span></div>
+          <div><strong>關聯函式:</strong> 共 ${item.bundle_count} 個呼叫實作函式已由 NetworkX 打包</div>
+        </div>
+        <div class="code-box">${escapeHtml(item.bundle_text)}</div>
+      `;
+    }
+
+    function copyCode() {
+      if (currentSourceCode) {
+        navigator.clipboard.writeText(currentSourceCode);
+        const btn = document.getElementById('copyCodeBtn');
+        const orig = btn.textContent;
+        btn.textContent = '✅ 已複製！';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      }
+    }
+
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function filterTree() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      document.querySelectorAll('#treeRoot > .tree-item').forEach(el => {
+        const text = el.textContent.toLowerCase();
+        if (!query || text.includes(query)) {
+          el.style.display = 'block';
+        } else {
+          el.style.display = 'none';
+        }
+      });
+    }
+
+    // 初始化渲染
+    renderTree();
+
+    // 預設高亮第一個錨點或優先選擇核心函式
+    if (uiData.length > 0) {
+      let defaultIdx = 0;
+      const targetIdx = uiData.findIndex(d => d.label.includes('Delete') || d.label.includes('main') || d.label.includes('clean_text') || d.label.includes('safe_parse'));
+      if (targetIdx !== -1) defaultIdx = targetIdx;
+
+      const targetItem = uiData[defaultIdx];
+      const targetRow = document.getElementById('row-anchor-' + defaultIdx);
+      if (targetItem.bundle_count > 0) {
+        showBundle(targetItem, targetRow);
+      } else if (funcsData[targetItem.anchor_id]) {
+        inspectFunction(targetItem.anchor_id, targetRow);
+      }
+    }
+  </script>
+</body>
+</html>
