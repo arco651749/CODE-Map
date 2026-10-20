@@ -423,7 +423,7 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                             scope={"scope_id": next_scope_id, "file": file_path, "line": line},
                             props={"is_cleanup": True}
                         )
-                        parent = self._find_enclosing_node_id(next_scope_id, graph)
+                        parent = self._find_enclosing_node_id(next_scope_id, scopes, graph)
                         if parent:
                             graph.add_edge_rich(
                                 source=parent,
