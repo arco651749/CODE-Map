@@ -123,6 +123,123 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             }
             next_scope_id = new_scope_id
 
+        elif node.type == "assignment_expression":
+            left = node.child_by_field_name("left")
+            right = node.child_by_field_name("right")
+            if right and right.type in ("function_expression", "arrow_function") and left:
+                method_name = None
+                if left.type == "member_expression":
+                    prop = left.child_by_field_name("property")
+                    if prop:
+                        method_name = prop.text.decode("utf-8")
+                elif left.type == "identifier":
+                    method_name = left.text.decode("utf-8")
+
+                if method_name:
+                    start_line = right.start_point[0] + 1
+                    start_col = right.start_point[1] + 1
+                    new_scope_id = f"scope:{method_name}@{file_path}:L{start_line}C{start_col}"
+                    depth = scopes[current_scope_id]["depth"] + 1
+
+                    func_node_id = f"func:{method_name}@{file_path}:L{start_line}C{start_col}"
+                    scopes[new_scope_id] = {
+                        "id": new_scope_id,
+                        "parent": current_scope_id,
+                        "depth": depth,
+                        "defs": {},
+                        "func_node_id": func_node_id,
+                    }
+
+                    is_async = (b"async" in right.children[0].text if right.children else False)
+                    params_node = right.child_by_field_name("parameters")
+                    param_text = params_node.text.decode("utf-8") if params_node else "()"
+                    full_text = right.text.decode("utf-8")
+                    sig_text = f"{method_name}{param_text}"
+                    end_line = right.end_point[0] + 1
+
+                    scopes[current_scope_id]["defs"][method_name] = {
+                        "node_id": func_node_id,
+                        "declared_scope": current_scope_id,
+                        "inner_scope": new_scope_id,
+                        "line": start_line,
+                        "is_async": is_async,
+                        "signature": sig_text,
+                        "parameters": param_text,
+                    }
+
+                    graph.add_node_rich(
+                        node_id=func_node_id,
+                        label=method_name,
+                        category="FUNCTION_DEF",
+                        scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line},
+                        props={
+                            "is_async": is_async,
+                            "inner_scope": new_scope_id,
+                            "signature": sig_text,
+                            "parameters": param_text,
+                            "line_start": start_line,
+                            "line_end": end_line,
+                            "line_count": end_line - start_line + 1,
+                            "source_code": full_text,
+                        }
+                    )
+                    next_scope_id = new_scope_id
+
+        elif node.type in ("method_definition", "pair"):
+            key_node = node.child_by_field_name("name") or node.child_by_field_name("key")
+            value_node = node.child_by_field_name("value") or node
+            if key_node and (node.type == "method_definition" or (value_node and value_node.type in ("function_expression", "arrow_function"))):
+                method_name = key_node.text.decode("utf-8").strip("'\"")
+                target_func_node = value_node if node.type == "pair" else node
+                start_line = target_func_node.start_point[0] + 1
+                start_col = target_func_node.start_point[1] + 1
+                new_scope_id = f"scope:{method_name}@{file_path}:L{start_line}C{start_col}"
+                depth = scopes[current_scope_id]["depth"] + 1
+
+                func_node_id = f"func:{method_name}@{file_path}:L{start_line}C{start_col}"
+                scopes[new_scope_id] = {
+                    "id": new_scope_id,
+                    "parent": current_scope_id,
+                    "depth": depth,
+                    "defs": {},
+                    "func_node_id": func_node_id,
+                }
+
+                is_async = (b"async" in target_func_node.children[0].text if target_func_node.children else False)
+                params_node = target_func_node.child_by_field_name("parameters")
+                param_text = params_node.text.decode("utf-8") if params_node else "()"
+                full_text = target_func_node.text.decode("utf-8")
+                sig_text = f"{method_name}{param_text}"
+                end_line = target_func_node.end_point[0] + 1
+
+                scopes[current_scope_id]["defs"][method_name] = {
+                    "node_id": func_node_id,
+                    "declared_scope": current_scope_id,
+                    "inner_scope": new_scope_id,
+                    "line": start_line,
+                    "is_async": is_async,
+                    "signature": sig_text,
+                    "parameters": param_text,
+                }
+
+                graph.add_node_rich(
+                    node_id=func_node_id,
+                    label=method_name,
+                    category="FUNCTION_DEF",
+                    scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line},
+                    props={
+                        "is_async": is_async,
+                        "inner_scope": new_scope_id,
+                        "signature": sig_text,
+                        "parameters": param_text,
+                        "line_start": start_line,
+                        "line_end": end_line,
+                        "line_count": end_line - start_line + 1,
+                        "source_code": full_text,
+                    }
+                )
+                next_scope_id = new_scope_id
+
         for child in node.children:
             self._collect_scopes_and_functions(child, next_scope_id, scopes, code, file_path, graph)
 
@@ -197,9 +314,17 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                                 detail="建立防洩漏銷毀清理守衛"
                             )
 
+            elif fn_node and fn_node.type == "member_expression":
+                prop = fn_node.child_by_field_name("property")
+                obj = fn_node.child_by_field_name("object")
+                prop_name = prop.text.decode("utf-8") if prop else ""
+                if prop_name not in ("log", "split", "trim", "charAt", "substr", "indexOf", "push", "filter", "map", "forEach", "slice", "concat"):
+                    is_awaited = (node.parent and node.parent.type == "await_expression")
+                    self._resolve_call_site(node, prop_name, next_scope_id, scopes, file_path, graph, is_awaited)
+
             elif fn_node and fn_node.type == "identifier":
                 callee_name = fn_node.text.decode("utf-8")
-                if callee_name not in ("fetch", "parseInt", "setTimeout"):
+                if callee_name not in ("fetch", "parseInt", "setTimeout", "require", "define"):
                     is_awaited = (node.parent and node.parent.type == "await_expression")
                     self._resolve_call_site(node, callee_name, next_scope_id, scopes, file_path, graph, is_awaited)
 
