@@ -119,6 +119,123 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             }
             next_scope_id = new_scope_id
 
+        elif node.type == "assignment_expression":
+            left = node.child_by_field_name("left")
+            right = node.child_by_field_name("right")
+            if right and right.type in ("function_expression", "arrow_function") and left:
+                method_name = None
+                if left.type == "member_expression":
+                    prop = left.child_by_field_name("property")
+                    if prop:
+                        method_name = prop.text.decode("utf-8")
+                elif left.type == "identifier":
+                    method_name = left.text.decode("utf-8")
+
+                if method_name:
+                    start_line = right.start_point[0] + 1
+                    start_col = right.start_point[1] + 1
+                    new_scope_id = f"scope:{method_name}@{file_path}:L{start_line}C{start_col}"
+                    depth = scopes[current_scope_id]["depth"] + 1
+
+                    func_node_id = f"func:{method_name}@{file_path}:L{start_line}C{start_col}"
+                    scopes[new_scope_id] = {
+                        "id": new_scope_id,
+                        "parent": current_scope_id,
+                        "depth": depth,
+                        "defs": {},
+                        "func_node_id": func_node_id,
+                    }
+
+                    is_async = (b"async" in right.children[0].text if right.children else False)
+                    params_node = right.child_by_field_name("parameters")
+                    param_text = params_node.text.decode("utf-8") if params_node else "()"
+                    full_text = right.text.decode("utf-8")
+                    sig_text = f"{method_name}{param_text}"
+                    end_line = right.end_point[0] + 1
+
+                    scopes[current_scope_id]["defs"][method_name] = {
+                        "node_id": func_node_id,
+                        "declared_scope": current_scope_id,
+                        "inner_scope": new_scope_id,
+                        "line": start_line,
+                        "is_async": is_async,
+                        "signature": sig_text,
+                        "parameters": param_text,
+                    }
+
+                    graph.add_node_rich(
+                        node_id=func_node_id,
+                        label=method_name,
+                        category="FUNCTION_DEF",
+                        scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line},
+                        props={
+                            "is_async": is_async,
+                            "inner_scope": new_scope_id,
+                            "signature": sig_text,
+                            "parameters": param_text,
+                            "line_start": start_line,
+                            "line_end": end_line,
+                            "line_count": end_line - start_line + 1,
+                            "source_code": full_text,
+                        }
+                    )
+                    next_scope_id = new_scope_id
+
+        elif node.type in ("method_definition", "pair"):
+            key_node = node.child_by_field_name("name") or node.child_by_field_name("key")
+            value_node = node.child_by_field_name("value") or node
+            if key_node and (node.type == "method_definition" or (value_node and value_node.type in ("function_expression", "arrow_function"))):
+                method_name = key_node.text.decode("utf-8").strip("'\"")
+                target_func_node = value_node if node.type == "pair" else node
+                start_line = target_func_node.start_point[0] + 1
+                start_col = target_func_node.start_point[1] + 1
+                new_scope_id = f"scope:{method_name}@{file_path}:L{start_line}C{start_col}"
+                depth = scopes[current_scope_id]["depth"] + 1
+
+                func_node_id = f"func:{method_name}@{file_path}:L{start_line}C{start_col}"
+                scopes[new_scope_id] = {
+                    "id": new_scope_id,
+                    "parent": current_scope_id,
+                    "depth": depth,
+                    "defs": {},
+                    "func_node_id": func_node_id,
+                }
+
+                is_async = (b"async" in target_func_node.children[0].text if target_func_node.children else False)
+                params_node = target_func_node.child_by_field_name("parameters")
+                param_text = params_node.text.decode("utf-8") if params_node else "()"
+                full_text = target_func_node.text.decode("utf-8")
+                sig_text = f"{method_name}{param_text}"
+                end_line = target_func_node.end_point[0] + 1
+
+                scopes[current_scope_id]["defs"][method_name] = {
+                    "node_id": func_node_id,
+                    "declared_scope": current_scope_id,
+                    "inner_scope": new_scope_id,
+                    "line": start_line,
+                    "is_async": is_async,
+                    "signature": sig_text,
+                    "parameters": param_text,
+                }
+
+                graph.add_node_rich(
+                    node_id=func_node_id,
+                    label=method_name,
+                    category="FUNCTION_DEF",
+                    scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line},
+                    props={
+                        "is_async": is_async,
+                        "inner_scope": new_scope_id,
+                        "signature": sig_text,
+                        "parameters": param_text,
+                        "line_start": start_line,
+                        "line_end": end_line,
+                        "line_count": end_line - start_line + 1,
+                        "source_code": full_text,
+                    }
+                )
+                next_scope_id = new_scope_id
+
         for child in node.children:
             self._collect_scopes_and_functions(child, next_scope_id, scopes, code, file_path, graph)
 
@@ -143,6 +260,21 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             start_line = node.start_point[0] + 1
             start_col = node.start_point[1] + 1
             next_scope_id = f"scope:arrow@{file_path}:L{start_line}C{start_col}"
+
+        # 支援 Backbone / Spine / Marionette 的宣告式 events 雜湊表:
+        # events: { 'click .destroy': 'remove', 'dblclick label': 'edit' }
+        # 或 Todos.prototype.events = { ... }
+        if node.type == "pair":
+            key_node = node.child_by_field_name("key")
+            value_node = node.child_by_field_name("value")
+            if key_node and key_node.text.decode("utf-8").strip("'\"") == "events" and value_node and value_node.type == "object":
+                self._handle_declarative_events_hash(value_node, next_scope_id, scopes, file_path, graph)
+
+        elif node.type == "assignment_expression":
+            left = node.child_by_field_name("left")
+            right = node.child_by_field_name("right")
+            if left and "events" in left.text.decode("utf-8") and right and right.type == "object":
+                self._handle_declarative_events_hash(right, next_scope_id, scopes, file_path, graph)
 
         if node.type in ("lexical_declaration", "variable_declaration"):
             node_text = node.text.decode("utf-8")
@@ -170,14 +302,107 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                 if prop and prop.text.decode("utf-8") == "addEventListener":
                     self._handle_add_event_listener(node, obj, next_scope_id, scopes, file_path, graph)
 
+            elif fn_node and fn_node.type == "member_expression":
+                prop = fn_node.child_by_field_name("property")
+                obj = fn_node.child_by_field_name("object")
+                prop_name = prop.text.decode("utf-8") if prop else ""
+                
+                # 支援 .on('click', ...), .bind('event', ...), $delegate(...)
+                if prop_name in ("on", "bind", "delegate", "live"):
+                    self._handle_add_event_listener(node, obj, next_scope_id, scopes, file_path, graph)
+                elif prop_name not in ("log", "split", "trim", "charAt", "substr", "indexOf", "push", "filter", "map", "forEach"):
+                    is_awaited = (node.parent and node.parent.type == "await_expression")
+                    self._resolve_call_site(node, prop_name, next_scope_id, scopes, file_path, graph, is_awaited)
+
             elif fn_node and fn_node.type == "identifier":
                 callee_name = fn_node.text.decode("utf-8")
-                if callee_name not in ("fetch", "parseInt", "setTimeout"):
+                if callee_name in ("$delegate", "$live", "$on"):
+                    self._handle_add_event_listener(node, None, next_scope_id, scopes, file_path, graph)
+                elif callee_name not in ("fetch", "parseInt", "setTimeout", "require", "define"):
                     is_awaited = (node.parent and node.parent.type == "await_expression")
                     self._resolve_call_site(node, callee_name, next_scope_id, scopes, file_path, graph, is_awaited)
 
         for child in node.children:
             self._wire_ui_and_calls(child, next_scope_id, scopes, code, file_path, graph)
+
+    def _handle_declarative_events_hash(
+        self,
+        object_node: Node,
+        current_scope_id: str,
+        scopes: Dict[str, Dict[str, Any]],
+        file_path: str,
+        graph: UIACodeGraph,
+    ):
+        """解析 Backbone / Spine 的 events 雜湊表，建立 UI_CONTROL -> EVENT_BINDING -> 處理常式 接線"""
+        for child in object_node.children:
+            if child.type == "pair":
+                key_node = child.child_by_field_name("key")
+                val_node = child.child_by_field_name("value")
+                if not key_node or not val_node:
+                    continue
+                
+                event_selector_str = key_node.text.decode("utf-8").strip("'\"")
+                handler_name = val_node.text.decode("utf-8").strip("'\"")
+                line = child.start_point[0] + 1
+                
+                parts = event_selector_str.split(None, 1)
+                event_name = parts[0] if parts else "action"
+                selector = parts[1] if len(parts) > 1 else "element"
+                
+                clean_selector = selector.strip()
+                clean_label = f"#{clean_selector}" if not clean_selector.startswith(("#", ".")) else clean_selector
+                ctrl_id = f"ctrl:{clean_selector}@{file_path}:L{line}"
+                
+                ui_type = "Button" if any(k in clean_selector.lower() for k in ("btn", "destroy", "toggle", "check", "button")) else "Control"
+                
+                # 新增或複用控制項節點
+                existing_ctrl = None
+                for n, d in graph.g.nodes(data=True):
+                    if d.get("category") == "UI_CONTROL" and d.get("label") == clean_label:
+                        existing_ctrl = n
+                        break
+                
+                if not existing_ctrl:
+                    graph.add_node_rich(
+                        node_id=ctrl_id,
+                        label=clean_label,
+                        category="UI_CONTROL",
+                        scope={"scope_id": current_scope_id, "file": file_path, "line": line},
+                        props={"ui_type": ui_type, "selector": clean_selector}
+                    )
+                    active_ctrl_id = ctrl_id
+                else:
+                    active_ctrl_id = existing_ctrl
+                
+                event_node_id = f"event:{clean_selector}.on('{event_name}')@{file_path}:L{line}"
+                graph.add_node_rich(
+                    node_id=event_node_id,
+                    label=f"on('{event_name}')",
+                    category="EVENT_BINDING",
+                    scope={"scope_id": current_scope_id, "file": file_path, "line": line},
+                    props={"event_name": event_name, "selector": clean_selector}
+                )
+                
+                graph.add_edge_rich(
+                    source=active_ctrl_id,
+                    target=event_node_id,
+                    edge_type="WIRES_TO",
+                    flow_type="SYNC",
+                    status="VALID",
+                    detail=f"Backbone/Spine 宣告式綁定 {event_name}"
+                )
+                
+                # 接線到處理函式
+                self._link_handler_with_reachability(
+                    caller_id=event_node_id,
+                    callee_name=handler_name,
+                    call_scope_id=current_scope_id,
+                    scopes=scopes,
+                    file_path=file_path,
+                    line=line,
+                    graph=graph,
+                    is_direct_trigger=True,
+                )
 
     def _extract_control_info(self, decl_node: Node, file_path: str) -> Tuple[Optional[str], str, str]:
         text = decl_node.text.decode("utf-8")
