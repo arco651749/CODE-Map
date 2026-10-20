@@ -4,7 +4,7 @@
 > **核心架構願景**：從 `AST (零件盤點)` ➔ `Call Graph (接線消解)` ➔ `CODE-Map 語意控制樹 (時空合一驗收)`  
 > **獨立自專案**：`d:\AntiGravity\Agent-Study`（會話 ID：`394096b1-bc18-40c1-8189-21c4f485bf2d`）  
 > 
-> 📄 **權威技術白皮書**：[《為什麼軟體工程需要 CODE-Map？—— 二十一項頂級開源專案、419 個真實修復 Commits 的實戰驗證與形式化因果圖論白皮書》](docs/why_code_map_matters_21_repos_whitepaper.md) (推薦必讀)
+> 📄 **權威技術白皮書**：[《為什麼軟體工程需要 CODE-Map？—— 二十七項頂級開源專案、539 個真實修復 Commits 的實戰驗證與形式化因果圖論白皮書》](docs/why_code_map_matters_27_repos_whitepaper.md) (推薦必讀)
 
 ---
 
@@ -125,7 +125,7 @@ d:\AntiGravity\UIA_Coder\
 │   ├── cli.py                       # 🚀 命令列介面邏輯實作
 │   └── __main__.py                  # 支援 python -m uia_coder 執行模組
 ├── docs/                            # 📚 官方權威文檔與研究白皮書
-│   └── why_code_map_matters_21_repos_whitepaper.md # 🏆 二十一項開源專案 419 Commits 形式化驗證白皮書
+│   └── why_code_map_matters_27_repos_whitepaper.md # 🏆 二十七項開源專案 539 Commits 形式化驗證白皮書
 ├── src/                             # 📄 多語言範例代碼 (JS/Python/Rust/Go/C#)
 │   ├── sample_rust_app.rs           # 🦀 Rust 範例程式 (包含 todo! 危害攔截示範)
 │   ├── sample_go_app.go             # 🐹 Go 範例程式 (包含 panic/time.Sleep 示範)
@@ -144,6 +144,7 @@ d:\AntiGravity\UIA_Coder\
 │   ├── audit_preact_vue_benchmark.py # ⚡ Preact (VDOM) + 💚 Vue 3 (Reactivity) 綜合稽核套件
 │   ├── audit_web_cli_quad_benchmark.py # 🌐 FastAPI + Gin + ⚡ ripgrep + fzf 四大專案綜合稽核套件
 │   ├── audit_csharp_rust_expansion_benchmark.py # 🚀 Avalonia + RestSharp (C#) + bat + axum (Rust) 擴展套件
+│   ├── audit_ultimate_six_benchmark.py # 🔥 NestJS + Zustand + go-redis + Zellij + Polars + EF Core 旗艦稽核套件
 │   ├── codemap_miner.py             # ⛏️ Git 倉庫歷史 Commits 探勘評估引擎
 │   └── generate_interactive_report.py # 雙欄互動式 HTML 儀表板生成器
 ├── legacy/                          # 📦 歷史封存 (早期原型與過渡轉發墊片)
@@ -152,7 +153,8 @@ d:\AntiGravity\UIA_Coder\
 ├── vendor/
 │   └── aider/repomap.py             # Aider 官方 RepoMap 參考實作
 ├── reports/                         # 生成之 HTML 視覺化儀表板與評估報告
-│   ├── dogfooding_benchmark_21_repos.md # 🏆 跨 21 大開源專案 419 Commits 實戰驗證綜合報告 (全領域覆蓋)
+│   ├── dogfooding_benchmark_27_repos.md # 🏆 跨 27 大開源專案 539 Commits 實戰驗證綜合報告 (全領域覆蓋)
+│   ├── dogfooding_benchmark_21_repos.md # 跨 21 大開源專案 419 Commits 實戰驗證綜合報告
 │   ├── dogfooding_benchmark_17_repos.md # 跨 17 大開源專案 339 Commits 實戰驗證綜合報告
 │   ├── dogfooding_benchmark_13_repos.md # 跨 13 大開源專案 259 Commits 實戰驗證報告
 │   ├── dogfooding_benchmark_11_repos.md # 跨 11 大開源專案 219 Commits 實戰驗證報告
@@ -210,7 +212,7 @@ python.exe -X utf8 tools/audit_textual_20_flow_bugs.py
   * 支援 `btnDelete.Click += OnClick` 事件綁定，直接生成原生 `#btnDelete (Button)` 控制項錨點。
   * 自動建立事件觸發與處理常式因果接線。
   * 攔截 UI 主執行緒中的 `Thread.Sleep()` 介面凍結與 `NotImplementedException` 未完成實作例外（`🔴 BLOCKED_BY_INVARIANTS`）。
-* **🏆 真實開源專案 Dogfooding 淬鍊 (跨 21 大主流專案 419 Commits 驗證 & 全領域覆蓋)**：
+* **🏆 真實開源專案 Dogfooding 淬鍊 (跨 27 大主流專案 539 Commits 驗證 & 全領域覆蓋)**：
   * **`tastejs/todomvc` (JavaScript 前端)**：19 Commits / 30 檔案，邏輯變更捕獲率 **100.0% (29/29)**。
   * **`Textualize/textual` (Python TUI)**：20 Commits / 27 檔案，邏輯變更捕獲率 **100.0% (24/24)**。
   * **`SortableJS/Sortable` (JavaScript 拖曳)**：20 Commits / 22 檔案，邏輯變更捕獲率 **100.0% (20/20)**。
@@ -232,15 +234,23 @@ python.exe -X utf8 tools/audit_textual_20_flow_bugs.py
   * **`restsharp/RestSharp` (C# 旗艦非同步 HTTP 客戶端 / 請求管線)**：20 Commits / 32 檔案，邏輯變更捕獲率 **100.0% (21/21 可執行)**。
   * **`sharkdp/bat` (Rust 現代語法高亮終端分頁器 / CLI)**：20 Commits / 21 檔案，邏輯變更捕獲率 **100.0% (20/20 可執行)**。
   * **`tokio-rs/axum` (Rust Tokio 旗艦非同步 Web 框架 / Tower)**：20 Commits / 22 檔案，邏輯變更捕獲率 **100.0% (19/19 可執行)**。
-  * **👑 六大領域全滿貫成果**：
+  * **`nestjs/nest` (TypeScript 企業級 IoC / 裝飾器管線)**：20 Commits / 24 檔案，邏輯變更捕獲率 **100.0% (23/23 可執行)**。
+  * **`pmndrs/zustand` (TypeScript 全域狀態 / 閉包不可變性)**：20 Commits / 21 檔案，邏輯變更捕獲率 **100.0% (12/12 可執行)**。
+  * **`redis/go-redis` (Go 高性能連線池 / Pipeline / 超時控制)**：20 Commits / 28 檔案，邏輯變更捕獲率 **100.0% (23/23 可執行)**。
+  * **`zellij-org/zellij` (Rust 終端多工器 / Actor IPC / Pty)**：20 Commits / 36 檔案，邏輯變更捕獲率 **100.0% (33/33 可執行)**。
+  * **`pola-rs/polars` (Rust DataFrame / Arrow / 平行 Rayon)**：20 Commits / 31 檔案，邏輯變更捕獲率 **100.0% (31/31 全滿貫)**。
+  * **`dotnet/efcore` (C# 企業級 ORM / 交易管線 / LINQ)**：20 Commits / 23 檔案，邏輯變更捕獲率 **100.0% (23/23 全滿貫)**。
+  * **👑 八大現代軟體架構支柱全滿貫**：
     1. **TUI 五大語言神滿貫**：Python (`textual`)、TS (`ink`)、Rust (`ratatui`)、Go (`bubbletea`)、C# (`spectre.console`)。
     2. **跨平台桌面 GUI 與控制項事件路由**：C# (`Avalonia` 視覺樹/邏輯樹、StyledProperty、路由事件隧道冒泡)。
-    3. **前端三大渲染與響應式基石**：Alpine DSL、Preact VDOM Diff、Vue 3 Proxy Reactivity。
+    3. **前端渲染與響應式基石**：Alpine DSL、Preact VDOM Diff、Vue 3 Proxy Reactivity。
     4. **現代非同步 Web 路由與中介軟體**：FastAPI (ASGI) + Gin (Radix Tree) + axum (Tower Service / Extractors)。
-    5. **現代非同步 HTTP 網路管線**：HTTPX (Python 連線池) + RestSharp (C# 請求管線與 Polly 重試)。
-    6. **系統級 CLI 工具、高併發搜尋與命令樹**：Cobra (命令樹分發) + ripgrep (Rust Mmap 搜尋) + bat (語法高亮分頁) + fzf (Go 終端事件循環)。
-  * **二十一項專案總結**：審查 543 檔案、419 Commits，總體捕獲率 **88.6% (481/543)**，**可執行邏輯變更捕獲率達成 100.0% (481/481)**！解析錯誤率 0%！
-  * 完整實戰報告詳見：[reports/dogfooding_benchmark_21_repos.md](file:///d:/AntiGravity/UIA_Coder/reports/dogfooding_benchmark_21_repos.md)。
+    5. **企業級 IoC 依賴注入與裝飾器攔截**：NestJS (Guards / Interceptors / Request-scoped DI)。
+    6. **全域不可變狀態管理與閉包安全**：Zustand (不可變 Store / Persist 競態) + XState (狀態機)。
+    7. **企業級 ORM、交易管線與連線池防護**：EF Core (LINQ 運算式樹 / SQLite 髒連線防護) + go-redis (連線狀態機)。
+    8. **系統級平行運算、DataFrame 與多工 IPC**：Polars (Arrow 記憶體切片) + Zellij (Actor 訊息匯流排) + Cobra + ripgrep + bat + fzf。
+  * **二十七項專案總結**：審查 706 檔案、539 Commits，總體捕獲率 **88.7% (626/706)**，**可執行邏輯變更捕獲率達成 100.0% (626/626)**！解析錯誤率 0%！
+  * 完整實戰報告詳見：[reports/dogfooding_benchmark_27_repos.md](file:///d:/AntiGravity/UIA_Coder/reports/dogfooding_benchmark_27_repos.md)。
 
 ---
 
@@ -254,10 +264,10 @@ python.exe -X utf8 tools/audit_textual_20_flow_bugs.py
    - Rust 結構體關聯方法、CLI 進入點與 `todo!()`/`panic!()` 危害攔截。
    - Go 結構體接收器方法、CLI 進入點與 `panic()`/`time.Sleep()` 危害攔截。
    - C# WPF/WinUI 事件綁定、控制項錨點與 `Thread.Sleep()`/`NotImplementedException` 攔截。
-4. [x] **二十一項開源專案 Dogfooding 實戰驗證 (Todomvc, Textual, Sortable, XState, Ink, HTTPX, Alpine, Ratatui, Bubbletea, Spectre.Console, Cobra, Preact, Vue 3, FastAPI, Gin, ripgrep, fzf, Avalonia, RestSharp, bat, axum)**：
-   - 橫跨 TUI、桌面 GUI、前端響應式、Web 路由、HTTP 管線與系統 CLI 六大領域。
+4. [x] **二十七項開源專案 Dogfooding 實戰驗證 (Todomvc, Textual, Sortable, XState, Ink, HTTPX, Alpine, Ratatui, Bubbletea, Spectre.Console, Cobra, Preact, Vue 3, FastAPI, Gin, ripgrep, fzf, Avalonia, RestSharp, bat, axum, NestJS, Zustand, go-redis, Zellij, Polars, EF Core)**：
+   - 橫跨 TUI、桌面 GUI、前端響應式、Web 路由、IoC 依賴注入、狀態閉包、ORM 連線池、系統平行計算與多工 IPC 八大領域。
    - 攻克 Windows Tree-sitter 0.26.0 記憶體隔離與 `TreeCursor` 原生走訪技術（Rust/Go/C# 全面免疫萬級節點 SEH 崩潰）。
-   - 543 檔案可執行邏輯變更捕獲率達 100.0% (481/481)。
+   - 706 檔案可執行邏輯變更捕獲率達 100.0% (626/626)。
 5. [x] **加入 UI 錨點圖切片 (Graph Slicing)**：`forward_slice(anchor_id)` 可從 UI 控制項向下切出受影響的完整因果子圖。
 6. [x] **標準化 Node-Link 序列化**：支援 `to_node_link_data()`，為 MCP Tool 與 Agent 協議提供零成本格式互轉。
 7. [x] **v2 統一互動式雙欄 HTML 儀表板**：支援點擊節點平滑滾動並高亮對應原始碼行號。
