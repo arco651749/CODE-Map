@@ -33,12 +33,14 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                 "id": "scope:global",
                 "parent": None,
                 "depth": 0,
-                "defs": {}
+                "defs": {},
+                "qualified_path": "global",
             }
         }
 
-        self._collect_scopes_and_functions(tree.root_node, "scope:global", scopes, source_code, file_path, graph)
-        self._wire_ui_and_calls(tree.root_node, "scope:global", scopes, source_code, file_path, graph)
+        node_scope_map: Dict[int, str] = {}
+        self._collect_scopes_and_functions(tree.root_node, "scope:global", scopes, source_code, file_path, graph, node_scope_map)
+        self._wire_ui_and_calls(tree.root_node, "scope:global", scopes, source_code, file_path, graph, node_scope_map)
         return graph
 
     def _infer_function_name(self, node: Node) -> Optional[str]:
@@ -104,16 +106,79 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         code: str,
         file_path: str,
         graph: UIACodeGraph,
+        node_scope_map: Optional[Dict[int, str]] = None,
     ):
         next_scope_id = current_scope_id
 
-        if node.type in ("function_declaration", "generator_function_declaration"):
+        # 收集模組頂層常數狀態 (MODULE_STATE)，如頂層映射表、正則常數等
+        if current_scope_id == "scope:global" and node.type in ("lexical_declaration", "variable_declaration"):
+            for child in node.children:
+                if child.type == "variable_declarator":
+                    name_node = child.child_by_field_name("name")
+                    val_node = child.child_by_field_name("value")
+                    if name_node and val_node and val_node.type not in ("function_expression", "arrow_function"):
+                        val_text = val_node.text.decode("utf-8")
+                        # 排除 DOM 控制項建立或選取 (由 UI_CONTROL 專責處理)
+                        if "createElement" in val_text or "querySelector" in val_text:
+                            continue
+                        var_name = name_node.text.decode("utf-8")
+                        start_line = child.start_point[0] + 1
+                        end_line = child.end_point[0] + 1
+                        state_nid = f"state:{var_name}@{file_path}:L{start_line}"
+                        raw_text = child.text.decode("utf-8")
+                        graph.add_node_rich(
+                            node_id=state_nid,
+                            label=var_name,
+                            category="MODULE_STATE",
+                            scope={"scope_id": "scope:global", "file": file_path, "line": start_line},
+                            props={
+                                "line_start": start_line,
+                                "line_end": end_line,
+                                "source_code": raw_text,
+                                "executable_fingerprint": self.compute_executable_fingerprint(child),
+                            }
+                        )
+
+        if node.type == "import_statement":
+            source_node = node.child_by_field_name("source")
+            mod_path = source_node.text.decode("utf-8").strip("'\"`") if source_node else ""
+            line = node.start_point[0] + 1
+            for child in node.children:
+                if child.type == "import_clause":
+                    for c in child.children:
+                        if c.type == "named_imports":
+                            for spec in c.children:
+                                if spec.type == "import_specifier":
+                                    name_node = spec.child_by_field_name("name")
+                                    alias_node = spec.child_by_field_name("alias")
+                                    imp_name = name_node.text.decode("utf-8") if name_node else ""
+                                    local_name = alias_node.text.decode("utf-8") if alias_node else imp_name
+                                    if imp_name:
+                                        graph.g.graph["imports"].append({
+                                            "local_name": local_name,
+                                            "imported_name": imp_name,
+                                            "module_specifier": mod_path,
+                                            "line": line,
+                                        })
+                        elif c.type == "identifier":
+                            dname = c.text.decode("utf-8")
+                            graph.g.graph["imports"].append({
+                                "local_name": dname,
+                                "imported_name": "default",
+                                "module_specifier": mod_path,
+                                "line": line,
+                            })
+
+        elif node.type in ("function_declaration", "generator_function_declaration"):
             func_name_node = node.child_by_field_name("name")
             func_name = func_name_node.text.decode("utf-8") if func_name_node else "anonymous"
             start_line = node.start_point[0] + 1
             start_col = node.start_point[1] + 1
             new_scope_id = f"scope:{func_name}@{file_path}:L{start_line}C{start_col}"
             depth = scopes[current_scope_id]["depth"] + 1
+
+            parent_qual = scopes[current_scope_id].get("qualified_path", "global")
+            qual = func_name if parent_qual == "global" else f"{parent_qual}.{func_name}"
 
             func_node_id = f"func:{func_name}@{file_path}:L{start_line}C{start_col}"
             scopes[new_scope_id] = {
@@ -122,6 +187,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                 "depth": depth,
                 "defs": {},
                 "func_node_id": func_node_id,
+                "qualified_path": qual,
             }
 
             is_async = (b"async" in node.children[0].text if node.children else False)
@@ -145,7 +211,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                 node_id=func_node_id,
                 label=func_name,
                 category="FUNCTION_DEF",
-                scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line},
+                scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line, "qualified_path": parent_qual},
                 props={
                     "is_async": is_async,
                     "inner_scope": new_scope_id,
@@ -155,8 +221,19 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                     "line_end": end_line,
                     "line_count": end_line - start_line + 1,
                     "source_code": full_text,
+                    "executable_fingerprint": self.compute_executable_fingerprint(node),
                 }
             )
+
+            is_exported = False
+            p_check = node.parent
+            while p_check:
+                if p_check.type in ("export_statement", "export_declaration"):
+                    is_exported = True
+                    break
+                p_check = p_check.parent
+            if is_exported:
+                graph.g.graph["exports"][func_name] = func_node_id
 
             next_scope_id = new_scope_id
 
@@ -166,6 +243,9 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             inferred_name = self._infer_function_name(node)
 
             if inferred_name:
+                parent_qual = scopes[current_scope_id].get("qualified_path", "global")
+                qual = inferred_name if parent_qual == "global" else f"{parent_qual}.{inferred_name}"
+
                 new_scope_id = f"scope:{inferred_name}@{file_path}:L{start_line}C{start_col}"
                 func_node_id = f"func:{inferred_name}@{file_path}:L{start_line}C{start_col}"
                 depth = scopes[current_scope_id]["depth"] + 1
@@ -176,6 +256,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                     "depth": depth,
                     "defs": {},
                     "func_node_id": func_node_id,
+                    "qualified_path": qual,
                 }
 
                 is_async = (b"async" in node.children[0].text if node.children else False)
@@ -199,7 +280,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                     node_id=func_node_id,
                     label=inferred_name,
                     category="FUNCTION_DEF",
-                    scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line},
+                    scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line, "qualified_path": parent_qual},
                     props={
                         "is_async": is_async,
                         "inner_scope": new_scope_id,
@@ -209,8 +290,20 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                         "line_end": end_line,
                         "line_count": end_line - start_line + 1,
                         "source_code": full_text,
+                        "executable_fingerprint": self.compute_executable_fingerprint(node),
                     }
                 )
+
+                is_exported = False
+                p_check = node.parent
+                while p_check:
+                    if p_check.type in ("export_statement", "export_declaration"):
+                        is_exported = True
+                        break
+                    p_check = p_check.parent
+                if is_exported:
+                    graph.g.graph["exports"][inferred_name] = func_node_id
+
                 next_scope_id = new_scope_id
             else:
                 new_scope_id = f"scope:arrow@{file_path}:L{start_line}C{start_col}"
@@ -282,6 +375,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                             "line_end": end_line,
                             "line_count": end_line - start_line + 1,
                             "source_code": full_text,
+                            "executable_fingerprint": self.compute_executable_fingerprint(right),
                         }
                     )
                     next_scope_id = new_scope_id
@@ -337,12 +431,16 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                         "line_end": end_line,
                         "line_count": end_line - start_line + 1,
                         "source_code": full_text,
+                        "executable_fingerprint": self.compute_executable_fingerprint(target_func_node),
                     }
                 )
                 next_scope_id = new_scope_id
 
+        if node_scope_map is not None and next_scope_id != current_scope_id:
+            node_scope_map[node.id] = next_scope_id
+
         for child in node.children:
-            self._collect_scopes_and_functions(child, next_scope_id, scopes, code, file_path, graph)
+            self._collect_scopes_and_functions(child, next_scope_id, scopes, code, file_path, graph, node_scope_map)
 
     def _wire_ui_and_calls(
         self,
@@ -352,31 +450,34 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         code: str,
         file_path: str,
         graph: UIACodeGraph,
+        node_scope_map: Optional[Dict[int, str]] = None,
     ):
-        next_scope_id = current_scope_id
-
-        if node.type in ("function_declaration", "generator_function_declaration"):
-            func_name_node = node.child_by_field_name("name")
-            func_name = func_name_node.text.decode("utf-8") if func_name_node else "anonymous"
-            start_line = node.start_point[0] + 1
-            start_col = node.start_point[1] + 1
-            next_scope_id = f"scope:{func_name}@{file_path}:L{start_line}C{start_col}"
-        elif node.type in ("method_definition", "pair"):
-            key_node = node.child_by_field_name("name") or node.child_by_field_name("key")
-            if key_node:
-                method_name = key_node.text.decode("utf-8").strip("'\"")
-                target_node = node.child_by_field_name("value") or node
-                start_line = target_node.start_point[0] + 1
-                start_col = target_node.start_point[1] + 1
-                next_scope_id = f"scope:{method_name}@{file_path}:L{start_line}C{start_col}"
-        elif node.type in ("arrow_function", "function_expression"):
-            start_line = node.start_point[0] + 1
-            start_col = node.start_point[1] + 1
-            inferred_name = self._infer_function_name(node)
-            if inferred_name:
-                next_scope_id = f"scope:{inferred_name}@{file_path}:L{start_line}C{start_col}"
-            else:
-                next_scope_id = f"scope:arrow@{file_path}:L{start_line}C{start_col}"
+        if node_scope_map is not None:
+            next_scope_id = node_scope_map.get(node.id, current_scope_id)
+        else:
+            next_scope_id = current_scope_id
+            if node.type in ("function_declaration", "generator_function_declaration"):
+                func_name_node = node.child_by_field_name("name")
+                func_name = func_name_node.text.decode("utf-8") if func_name_node else "anonymous"
+                start_line = node.start_point[0] + 1
+                start_col = node.start_point[1] + 1
+                next_scope_id = f"scope:{func_name}@{file_path}:L{start_line}C{start_col}"
+            elif node.type in ("method_definition", "pair"):
+                key_node = node.child_by_field_name("name") or node.child_by_field_name("key")
+                if key_node:
+                    method_name = key_node.text.decode("utf-8").strip("'\"")
+                    target_node = node.child_by_field_name("value") or node
+                    start_line = target_node.start_point[0] + 1
+                    start_col = target_node.start_point[1] + 1
+                    next_scope_id = f"scope:{method_name}@{file_path}:L{start_line}C{start_col}"
+            elif node.type in ("arrow_function", "function_expression"):
+                start_line = node.start_point[0] + 1
+                start_col = node.start_point[1] + 1
+                inferred_name = self._infer_function_name(node)
+                if inferred_name:
+                    next_scope_id = f"scope:{inferred_name}@{file_path}:L{start_line}C{start_col}"
+                else:
+                    next_scope_id = f"scope:arrow@{file_path}:L{start_line}C{start_col}"
 
         # 支援 Backbone / Spine / Marionette 的宣告式 events 雜湊表:
         # events: { 'click .destroy': 'remove', 'dblclick label': 'edit' }
@@ -440,7 +541,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                     self._resolve_call_site(node, callee_name, next_scope_id, scopes, file_path, graph, is_awaited)
 
         for child in node.children:
-            self._wire_ui_and_calls(child, next_scope_id, scopes, code, file_path, graph)
+            self._wire_ui_and_calls(child, next_scope_id, scopes, code, file_path, graph, node_scope_map)
 
     def _handle_declarative_events_hash(
         self,
@@ -696,6 +797,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
 
         parent_node = self._find_enclosing_node_id(caller_scope_id, scopes, graph)
         flow_type = "AWAIT" if is_awaited else "SYNC"
+        ctx = self._inspect_control_context(call_node)
 
         self._link_handler_with_reachability(
             caller_id=parent_node or f"scope:{caller_scope_id}",
@@ -707,6 +809,10 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             graph=graph,
             is_direct_trigger=False,
             flow_type=flow_type,
+            is_conditional=ctx["is_conditional"],
+            guard_type=ctx["guard_type"],
+            guard_expr=ctx["guard_expr"],
+            is_error_handled=ctx["is_error_handled"],
         )
 
     def _link_handler_with_reachability(
@@ -720,6 +826,10 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         graph: UIACodeGraph,
         is_direct_trigger: bool = False,
         flow_type: str = "SYNC",
+        is_conditional: bool = False,
+        guard_type: str = "NONE",
+        guard_expr: str = "",
+        is_error_handled: bool = False,
     ):
         found_def = None
         declaring_scope_id = None
@@ -745,7 +855,11 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                     edge_type=edge_type,
                     flow_type=flow_type,
                     status="VALID",
-                    detail=f"作用域可達 (定義於 {declaring_scope_id})"
+                    detail=f"作用域可達 (定義於 {declaring_scope_id})",
+                    is_conditional=is_conditional,
+                    guard_type=guard_type,
+                    guard_expr=guard_expr,
+                    is_error_handled=is_error_handled,
                 )
         else:
             isolated_def = None
@@ -759,14 +873,32 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             if isolated_def:
                 target_node_id = isolated_def["node_id"]
                 if caller_id in graph.g and target_node_id in graph.g:
-                    graph.add_edge_rich(
-                        source=caller_id,
-                        target=target_node_id,
-                        edge_type=edge_type,
-                        flow_type=flow_type,
-                        status="BLOCKED_SCOPE",
-                        detail=f"💥 作用域阻隔: 函式 '{callee_name}' 被深鎖在內部閉包 ({isolated_scope_id})，外部無法調用！"
-                    )
+                    if isolated_scope_id == "scope:global":
+                        graph.add_edge_rich(
+                            source=caller_id,
+                            target=target_node_id,
+                            edge_type=edge_type,
+                            flow_type=flow_type,
+                            status="VALID",
+                            detail=f"作用域可達 (定義於模組頂層 {isolated_scope_id})",
+                            is_conditional=is_conditional,
+                            guard_type=guard_type,
+                            guard_expr=guard_expr,
+                            is_error_handled=is_error_handled,
+                        )
+                    else:
+                        graph.add_edge_rich(
+                            source=caller_id,
+                            target=target_node_id,
+                            edge_type=edge_type,
+                            flow_type=flow_type,
+                            status="BLOCKED_SCOPE",
+                            detail=f"💥 作用域阻隔: 函式 '{callee_name}' 被深鎖在內部閉包 ({isolated_scope_id})，外部無法調用！",
+                            is_conditional=is_conditional,
+                            guard_type=guard_type,
+                            guard_expr=guard_expr,
+                            is_error_handled=is_error_handled,
+                        )
             else:
                 unresolved_id = f"func:{callee_name}@external"
                 if unresolved_id not in graph.g:
@@ -784,7 +916,11 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                         edge_type=edge_type,
                         flow_type=flow_type,
                         status="VALID",
-                        detail="引用全域或外部函式"
+                        detail="引用全域或外部函式",
+                        is_conditional=is_conditional,
+                        guard_type=guard_type,
+                        guard_expr=guard_expr,
+                        is_error_handled=is_error_handled,
                     )
 
     def _find_enclosing_node_id(self, scope_id: str, scopes: Dict[str, Dict[str, Any]], graph: UIACodeGraph) -> Optional[str]:

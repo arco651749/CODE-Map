@@ -98,7 +98,30 @@ class GoUIAGraphBuilder(BaseUIAGraphBuilder):
                             "line_count": max(1, end_row - start_row + 1),
                             "receiver_type": recv_type or "",
                             "raw_name": raw_name,
+                            "executable_fingerprint": self.compute_executable_fingerprint(node),
                         },
+                    )
+
+            elif ntype in ("const_declaration", "var_declaration"):
+                start_row = get_line(node.start_byte)
+                end_row = get_line(node.end_byte)
+                source_code_slice = decode_slice(node.start_byte, node.end_byte)
+                var_name = source_code_slice.split("\n")[0].split("=")[0].replace("const", "").replace("var", "").strip().split()[0] if source_code_slice else f"state_{start_row}"
+                var_name = var_name.strip("()")
+                if var_name:
+                    state_id = f"state:{var_name}@{file_path}:L{start_row}"
+                    graph.add_node_rich(
+                        node_id=state_id,
+                        label=var_name,
+                        category="MODULE_STATE",
+                        scope={"scope_id": "scope:global", "file": file_path, "line": start_row},
+                        props={
+                            "signature": f"[Module State] {var_name}",
+                            "source_code": source_code_slice,
+                            "line_start": start_row,
+                            "line_end": end_row,
+                            "executable_fingerprint": self.compute_executable_fingerprint(node),
+                        }
                     )
 
             if cursor.goto_first_child():

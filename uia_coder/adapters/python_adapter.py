@@ -37,6 +37,10 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
             }
         }
 
+        # 檢測原始碼是否引入 UI 框架特徵 (避免純後端專案被誤判為 UI 應用)
+        ui_keywords = ("textual", "PyQt", "PySide", "tkinter", "ttk", "wx", "kivy", "flet", "customtkinter")
+        self._has_ui_import = any(kw in source_code for kw in ui_keywords)
+
         # 階段 1：收集所有函式宣告、方法宣告與巢狀 Scope
         self._collect_scopes_and_functions(tree.root_node, "scope:global", scopes, source_code, file_path, graph)
 
@@ -144,7 +148,12 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
             params_node = node.child_by_field_name("parameters")
             param_text = params_node.text.decode("utf-8") if params_node else "()"
             full_text = node.text.decode("utf-8")
-            sig_text = full_text.split(":")[0].strip() if ":" in full_text else full_text.split("\n")[0].strip()
+            body_node = node.child_by_field_name("body")
+            if body_node:
+                header_bytes = node.text[: body_node.start_byte - node.start_byte]
+                sig_text = " ".join(header_bytes.decode("utf-8", errors="replace").strip().rstrip(":").split())
+            else:
+                sig_text = " ".join(full_text.split("\n")[0].strip().rstrip(":").split())
             end_line = node.end_point[0] + 1
 
             scopes[current_scope_id]["defs"][func_name] = {
@@ -173,6 +182,7 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
                     "line_end": end_line,
                     "line_count": end_line - start_line + 1,
                     "source_code": full_text,
+                    "executable_fingerprint": self.compute_executable_fingerprint(node),
                 }
             )
 
@@ -348,7 +358,7 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
                             graph.g.nodes[func_nid]["props"]["is_worker"] = True
 
         # 2. 檢查命名約定: on_button_pressed, on_key, on_mount, on_click
-        if not event_name and func_name.startswith("on_"):
+        if not event_name and func_name.startswith("on_") and getattr(self, "_has_ui_import", False):
             parts = func_name.split("_")
             if len(parts) >= 3:
                 # 例如 on_button_pressed -> ctrl=button, event=pressed

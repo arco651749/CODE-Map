@@ -112,10 +112,11 @@ def main():
 
     # 輸出摘要統計
     print("\n================================================================================")
-    print("📊 CODE-Map 基準評估統計結果:")
+    print("📊 CODE-Map 基準評估統計結果 (去水分雙軌指標):")
     print("================================================================================")
     total_files = sum(len(c["files"]) for c in report_records)
-    flow_captured = 0
+    structural_captured = 0
+    body_level_captured = 0
     zero_delta = 0
     errors = 0
 
@@ -123,15 +124,29 @@ def main():
         for f in c["files"]:
             if "error" in f:
                 errors += 1
-            elif f["added_edges"] > 0 or f["removed_edges"] > 0 or f["modified_funcs"] > 0 or f["transitions"] > 0 or (f["anchors_a"] != f["anchors_b"]):
-                flow_captured += 1
             else:
-                zero_delta += 1
+                is_structural = (
+                    f["added_edges"] > 0
+                    or f["removed_edges"] > 0
+                    or f.get("added_nodes", 0) > 0
+                    or f.get("removed_nodes", 0) > 0
+                    or f["transitions"] > 0
+                    or (f["anchors_a"] != f["anchors_b"])
+                )
+                if is_structural:
+                    structural_captured += 1
+                elif f["modified_funcs"] > 0:
+                    body_level_captured += 1
+                else:
+                    zero_delta += 1
 
+    total_captured = structural_captured + body_level_captured
     print(f"總審查 Commit 數: {len(report_records)}")
     print(f"審查檔案總數: {total_files}")
-    print(f"成功捕獲流程/接線/函式語意變動: {flow_captured} / {total_files} ({flow_captured/total_files*100:.1f}%)")
-    print(f"無語意圖譜變動 (盲區): {zero_delta} / {total_files} ({zero_delta/total_files*100:.1f}%)")
+    print(f"  🔹 結構性因果圖變動 (Structural Graph Delta): {structural_captured} / {total_files} ({structural_captured/total_files*100:.1f}%)")
+    print(f"  🔸 函式體純文字變動 (Body-Level Semantic Delta): {body_level_captured} / {total_files} ({body_level_captured/total_files*100:.1f}%)")
+    print(f"  🏆 總體可執行邏輯變更捕獲率: {total_captured} / {total_files} ({total_captured/total_files*100:.1f}%)")
+    print(f"無語意圖譜變動 (純註釋/空白或未涵蓋): {zero_delta} / {total_files} ({zero_delta/total_files*100:.1f}%)")
     print(f"解析錯誤: {errors} / {total_files}")
 
 if __name__ == "__main__":

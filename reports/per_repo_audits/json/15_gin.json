@@ -1,0 +1,597 @@
+{
+  "repo_id": "15",
+  "repo_name": "gin",
+  "lang": "Go (前綴樹路由 / 中介軟體管線)",
+  "path": "test_repos/gin",
+  "summary": {
+    "total_commits": 20,
+    "total_files": 22,
+    "structural_graph_delta": 13,
+    "body_level_semantic_delta": 7,
+    "zero_delta": 2,
+    "errors": 0,
+    "capture_rate_pct": 90.91
+  },
+  "commits": [
+    {
+      "index": 1,
+      "hash": "ea9fab99e01d55a5e4f8daacc0d11ccffaee0a15",
+      "message": "fix(tree): grow skippedNodes when pooled capacity is stale (#4852)",
+      "files": [
+        {
+          "file": "tree.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 52,
+          "edges_before": 53,
+          "anchors_before": 0,
+          "nodes_after": 52,
+          "edges_after": 54,
+          "anchors_after": 0,
+          "added_nodes": 0,
+          "removed_nodes": 0,
+          "added_edges": 1,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增呼叫邊] `node.getValue` ──[CALLS]──> `append (External/Pkg)`\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `node.getValue()`\n- **變更前簽章 (Before)**: `func node.getValue(path string, params *Params, skippedNodes *[]skippedNode, unescape bool)` (L418~L673)\n- **變更後簽章 (After)**: `func node.getValue(path string, params *Params, skippedNodes *[]skippedNode, unescape bool)` (L418~L672)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (n *node) getValue(path string, params *Params, skippedNodes *[]skippedNode, unescape bool) (value nodeValue) {\n\tvar globalParamsCount int16\n\n\t// Reset the skipped-nodes stack on entry. getValue is called once per\n\t// method tree (e.g. in the HandleMethodNotAllowed loop) reusing the same\n\t// pooled Context stack, and the walk below grows it via a raw reslice that\n\t// cannot exceed engine.maxSections. Without this reset the residue from a\n\t// previous tree leaks into the next call and can panic with \"slice bounds\n\t// out of range\" once the accumulated length passes the capacity.\n\t*skippedNodes = (*skippedNodes)[:0]\n\nwalk: // Outer loop for walking the tree\n\tfor {\n\t\tprefix := n.path\n\t\tif len(path) > len(prefix) {\n\t\t\tif path[:len(prefix)] == prefix {\n\t\t\t\tpath = path[len(prefix):]\n\n\t\t\t\t// Try all the non-wildcard children first by matching the indices\n\t\t\t\tidxc := path[0]\n\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\t//  strings.HasPrefix(n.children[len(n.children)-1].path, \":\") == n.wildChild\n\t\t\t\t\t\tif n.wildChild {\n\t\t\t\t\t\t\tindex := len(*skippedNodes)\n\t\t\t\t\t\t\t*skippedNodes = (*skippedNodes)[:index+1]\n\t\t\t\t\t\t\t(*skippedNodes)[index] = skippedNode{\n\t\t\t\t\t\t\t\tpath: prefix + path,\n\t\t\t\t\t\t\t\tnode: &node{\n\t\t\t\t\t\t\t\t\tpath:      n.path,\n\t\t\t\t\t\t\t\t\twildChild: n.wildChild,\n\t\t\t\t\t\t\t\t\tnType:     n.nType,\n\t\t\t\t\t\t\t\t\tpriority:  n.priority,\n\t\t\t\t\t\t\t\t\tchildren:  n.children,\n\t\t\t\t\t\t\t\t\thandlers:  n.handlers,\n\t\t\t\t\t\t\t\t\tfullPath:  n.fullPath,\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\tparamsCount: globalParamsCount,\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tn = n.children[i]\n\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\tif !n.wildChild {\n\t\t\t\t\t// If the path at the end of the loop is not equal to '/' and the current node has no child nodes\n\t\t\t\t\t// the current node needs to roll back to last valid skippedNode\n\t\t\t\t\tif path != \"/\" {\n\t\t\t\t\t\tfor length := len(*skippedNodes); length > 0; length-- {\n\t\t\t\t\t\t\tskippedNode := (*skippedNodes)[length-1]\n\t\t\t\t\t\t\t*skippedNodes = (*skippedNodes)[:length-1]\n\t\t\t\t\t\t\tif strings.HasSuffix(skippedNode.path, path) {\n\t\t\t\t\t\t\t\tpath = skippedNode.path\n\t\t\t\t\t\t\t\tn = skippedNode.node\n\t\t\t\t\t\t\t\tif value.params != nil {\n\t\t\t\t\t\t\t\t\t*value.params = (*value.params)[:skippedNode.paramsCount]\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tglobalParamsCount = skippedNode.paramsCount\n\t\t\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\t// Nothing found.\n\t\t\t\t\t// We can recommend to redirect to the same URL without a\n\t\t\t\t\t// trailing slash if a leaf exists for that path.\n\t\t\t\t\tvalue.tsr = path == \"/\" && n.handlers != nil\n\t\t\t\t\treturn value\n\t\t\t\t}\n\n\t\t\t\t// Handle wildcard child, which is always at the end of the array\n\t\t\t\tn = n.children[len(n.children)-1]\n\t\t\t\tglobalParamsCount++\n\n\t\t\t\tswitch n.nType {\n\t\t\t\tcase param:\n\t\t\t\t\t// fix truncate the parameter\n\t\t\t\t\t// tree_test.go  line: 204\n\n\t\t\t\t\t// Find param end (either '/' or path end)\n\t\t\t\t\tend := 0\n\t\t\t\t\tfor end < len(path) && path[end] != '/' {\n\t\t\t\t\t\tend++\n\t\t\t\t\t}\n\n\t\t\t\t\t// Save param value\n\t\t\t\t\tif params != nil {\n\t\t\t\t\t\t// Preallocate capacity if necessary\n\t\t\t\t\t\tif cap(*params) < int(globalParamsCount) {\n\t\t\t\t\t\t\tnewParams := make(Params, len(*params), globalParamsCount)\n\t\t\t\t\t\t\tcopy(newParams, *params)\n\t\t\t\t\t\t\t*params = newParams\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tif value.params == nil {\n\t\t\t\t\t\t\tvalue.params = params\n\t\t\t\t\t\t}\n\t\t\t\t\t\t// Expand slice within preallocated capacity\n\t\t\t\t\t\ti := len(*value.params)\n\t\t\t\t\t\t*value.params = (*value.params)[:i+1]\n\t\t\t\t\t\tval := path[:end]\n\t\t\t\t\t\tif unescape {\n\t\t\t\t\t\t\tif v, err := url.QueryUnescape(val); err == nil {\n\t\t\t\t\t\t\t\tval = v\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t\t(*value.params)[i] = Param{\n\t\t\t\t\t\t\tKey:   n.path[1:],\n\t\t\t\t\t\t\tValue: val,\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\t// we need to go deeper!\n\t\t\t\t\tif end < len(path) {\n\t\t\t\t\t\tif len(n.children) > 0 {\n\t\t\t\t\t\t\tpath = path[end:]\n\t\t\t\t\t\t\tn = n.children[0]\n\t\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\t// ... but we can't\n\t\t\t\t\t\tvalue.tsr = len(path) == end+1\n\t\t\t\t\t\treturn value\n\t\t\t\t\t}\n\n\t\t\t\t\tif value.handlers = n.handlers; value.handlers != nil {\n\t\t\t\t\t\tvalue.fullPath = n.fullPath\n\t\t\t\t\t\treturn value\n\t\t\t\t\t}\n\t\t\t\t\tif len(n.children) == 1 {\n\t\t\t\t\t\t// No handle found. Check if a handle for this path + a\n\t\t\t\t\t\t// trailing slash exists for TSR recommendation\n\t\t\t\t\t\tn = n.children[0]\n\t\t\t\t\t\tvalue.tsr = (n.path == \"/\" && n.handlers != nil) || (n.path == \"\" && n.indices == \"/\")\n\t\t\t\t\t}\n\t\t\t\t\treturn value\n\n\t\t\t\tcase catchAll:\n\t\t\t\t\t// Save param value\n\t\t\t\t\tif params != nil {\n\t\t\t\t\t\t// Preallocate capacity if necessary\n\t\t\t\t\t\tif cap(*params) < int(globalParamsCount) {\n\t\t\t\t\t\t\tnewParams := make(Params, len(*params), globalParamsCount)\n\t\t\t\t\t\t\tcopy(newParams, *params)\n\t\t\t\t\t\t\t*params = newParams\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tif value.params == nil {\n\t\t\t\t\t\t\tvalue.params = params\n\t\t\t\t\t\t}\n\t\t\t\t\t\t// Expand slice within preallocated capacity\n\t\t\t\t\t\ti := len(*value.params)\n\t\t\t\t\t\t*value.params = (*value.params)[:i+1]\n\t\t\t\t\t\tval := path\n\t\t\t\t\t\tif unescape {\n\t\t\t\t\t\t\tif v, err := url.QueryUnescape(path); err == nil {\n\t\t\t\t\t\t\t\tval = v\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t\t(*value.params)[i] = Param{\n\t\t\t\t\t\t\tKey:   n.path[2:],\n\t\t\t\t\t\t\tValue: val,\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\tvalue.handlers = n.handlers\n\t\t\t\t\tvalue.fullPath = n.fullPath\n\t\t\t\t\treturn value\n\n\t\t\t\tdefault:\n\t\t\t\t\tpanic(\"invalid node type\")\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\n\t\tif path == prefix {\n\t\t\t// If the current path does not equal '/' and the node does not have a registered handle and the most recently matched node has a child node\n\t\t\t// the current node needs to roll back to last valid skippedNode\n\t\t\tif n.handlers == nil && path != \"/\" {\n\t\t\t\tfor length := len(*skippedNodes); length > 0; length-- {\n\t\t\t\t\tskippedNode := (*skippedNodes)[length-1]\n\t\t\t\t\t*skippedNodes = (*skippedNodes)[:length-1]\n\t\t\t\t\tif strings.HasSuffix(skippedNode.path, path) {\n\t\t\t\t\t\tpath = skippedNode.path\n\t\t\t\t\t\tn = skippedNode.node\n\t\t\t\t\t\tif value.params != nil {\n\t\t\t\t\t\t\t*value.params = (*value.params)[:skippedNode.paramsCount]\n\t\t\t\t\t\t}\n\t\t\t\t\t\tglobalParamsCount = skippedNode.paramsCount\n\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t//\tn = latestNode.children[len(latestNode.children)-1]\n\t\t\t}\n\t\t\t// We should have reached the node containing the handle.\n\t\t\t// Check if this node has a handle registered.\n\t\t\tif value.handlers = n.handlers; value.handlers != nil {\n\t\t\t\tvalue.fullPath = n.fullPath\n\t\t\t\treturn value\n\t\t\t}\n\n\t\t\t// If there is no handle for this route, but this route has a\n\t\t\t// wildcard child, there must be a handle for this path with an\n\t\t\t// additional trailing slash\n\t\t\tif path == \"/\" && n.wildChild && n.nType != root {\n\t\t\t\tvalue.tsr = true\n\t\t\t\treturn value\n\t\t\t}\n\n\t\t\tif path == \"/\" && n.nType == static {\n\t\t\t\tvalue.tsr = true\n\t\t\t\treturn value\n\t\t\t}\n\n\t\t\t// No handle found. Check if a handle for this path + a\n\t\t\t// trailing slash exists for trailing slash recommendation\n\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\tif c == '/' {\n\t\t\t\t\tn = n.children[i]\n\t\t\t\t\tvalue.tsr = (len(n.path) == 1 && n.handlers != nil) ||\n\t\t\t\t\t\t(n.nType == catchAll && n.children[0].handlers != nil)\n\t\t\t\t\treturn value\n\t\t\t\t}\n\t\t\t}\n\n\t\t\treturn value\n\t\t}\n\n\t\t// Nothing found. We can recommend to redirect to the same URL with an\n\t\t// extra trailing slash if a leaf exists for that path\n\t\tvalue.tsr = path == \"/\" ||\n\t\t\t(len(prefix) == len(path)+1 && prefix[len(path)] == '/' &&\n\t\t\t\tpath == prefix[:len(prefix)-1] && n.handlers != nil)\n\n\t\t// roll back to last valid skippedNode\n\t\tif !value.tsr && path != \"/\" {\n\t\t\tfor length := len(*skippedNodes); length > 0; length-- {\n\t\t\t\tskippedNode := (*skippedNodes)[length-1]\n\t\t\t\t*skippedNodes = (*skippedNodes)[:length-1]\n\t\t\t\tif strings.HasSuffix(skippedNode.path, path) {\n\t\t\t\t\tpath = skippedNode.path\n\t\t\t\t\tn = skippedNode.node\n\t\t\t\t\tif value.params != nil {\n\t\t\t\t\t\t*value.params = (*value.params)[:skippedNode.paramsCount]\n\t\t\t\t\t}\n\t\t\t\t\tglobalParamsCount = skippedNode.paramsCount\n\t\t\t\t\tcontinue walk\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\n\t\treturn value\n\t}\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (n *node) getValue(path string, params *Params, skippedNodes *[]skippedNode, unescape bool) (value nodeValue) {\n\tvar globalParamsCount int16\n\n\t// Reset the skipped-nodes stack on entry. getValue is called once per\n\t// method tree (e.g. in the HandleMethodNotAllowed loop) reusing the same\n\t// pooled Context stack. Without this reset the residue from a previous\n\t// tree leaks into the next call. The walk grows the stack with append:\n\t// a context allocated before addRoute raised maxSections must still be\n\t// able to record one more backtrack frame. A raw reslice of the capacity\n\t// captured at pool allocation panics with \"slice bounds out of range\".\n\t*skippedNodes = (*skippedNodes)[:0]\n\nwalk: // Outer loop for walking the tree\n\tfor {\n\t\tprefix := n.path\n\t\tif len(path) > len(prefix) {\n\t\t\tif path[:len(prefix)] == prefix {\n\t\t\t\tpath = path[len(prefix):]\n\n\t\t\t\t// Try all the non-wildcard children first by matching the indices\n\t\t\t\tidxc := path[0]\n\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\t//  strings.HasPrefix(n.children[len(n.children)-1].path, \":\") == n.wildChild\n\t\t\t\t\t\tif n.wildChild {\n\t\t\t\t\t\t\t*skippedNodes = append(*skippedNodes, skippedNode{\n\t\t\t\t\t\t\t\tpath: prefix + path,\n\t\t\t\t\t\t\t\tnode: &node{\n\t\t\t\t\t\t\t\t\tpath:      n.path,\n\t\t\t\t\t\t\t\t\twildChild: n.wildChild,\n\t\t\t\t\t\t\t\t\tnType:     n.nType,\n\t\t\t\t\t\t\t\t\tpriority:  n.priority,\n\t\t\t\t\t\t\t\t\tchildren:  n.children,\n\t\t\t\t\t\t\t\t\thandlers:  n.handlers,\n\t\t\t\t\t\t\t\t\tfullPath:  n.fullPath,\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\tparamsCount: globalParamsCount,\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tn = n.children[i]\n\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\tif !n.wildChild {\n\t\t\t\t\t// If the path at the end of the loop is not equal to '/' and the current node has no child nodes\n\t\t\t\t\t// the current node needs to roll back to last valid skippedNode\n\t\t\t\t\tif path != \"/\" {\n\t\t\t\t\t\tfor length := len(*skippedNodes); length > 0; length-- {\n\t\t\t\t\t\t\tskippedNode := (*skippedNodes)[length-1]\n\t\t\t\t\t\t\t*skippedNodes = (*skippedNodes)[:length-1]\n\t\t\t\t\t\t\tif strings.HasSuffix(skippedNode.path, path) {\n\t\t\t\t\t\t\t\tpath = skippedNode.path\n\t\t\t\t\t\t\t\tn = skippedNode.node\n\t\t\t\t\t\t\t\tif value.params != nil {\n\t\t\t\t\t\t\t\t\t*value.params = (*value.params)[:skippedNode.paramsCount]\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tglobalParamsCount = skippedNode.paramsCount\n\t\t\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\t// Nothing found.\n\t\t\t\t\t// We can recommend to redirect to the same URL without a\n\t\t\t\t\t// trailing slash if a leaf exists for that path.\n\t\t\t\t\tvalue.tsr = path == \"/\" && n.handlers != nil\n\t\t\t\t\treturn value\n\t\t\t\t}\n\n\t\t\t\t// Handle wildcard child, which is always at the end of the array\n\t\t\t\tn = n.children[len(n.children)-1]\n\t\t\t\tglobalParamsCount++\n\n\t\t\t\tswitch n.nType {\n\t\t\t\tcase param:\n\t\t\t\t\t// fix truncate the parameter\n\t\t\t\t\t// tree_test.go  line: 204\n\n\t\t\t\t\t// Find param end (either '/' or path end)\n\t\t\t\t\tend := 0\n\t\t\t\t\tfor end < len(path) && path[end] != '/' {\n\t\t\t\t\t\tend++\n\t\t\t\t\t}\n\n\t\t\t\t\t// Save param value\n\t\t\t\t\tif params != nil {\n\t\t\t\t\t\t// Preallocate capacity if necessary\n\t\t\t\t\t\tif cap(*params) < int(globalParamsCount) {\n\t\t\t\t\t\t\tnewParams := make(Params, len(*params), globalParamsCount)\n\t\t\t\t\t\t\tcopy(newParams, *params)\n\t\t\t\t\t\t\t*params = newParams\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tif value.params == nil {\n\t\t\t\t\t\t\tvalue.params = params\n\t\t\t\t\t\t}\n\t\t\t\t\t\t// Expand slice within preallocated capacity\n\t\t\t\t\t\ti := len(*value.params)\n\t\t\t\t\t\t*value.params = (*value.params)[:i+1]\n\t\t\t\t\t\tval := path[:end]\n\t\t\t\t\t\tif unescape {\n\t\t\t\t\t\t\tif v, err := url.QueryUnescape(val); err == nil {\n\t\t\t\t\t\t\t\tval = v\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t\t(*value.params)[i] = Param{\n\t\t\t\t\t\t\tKey:   n.path[1:],\n\t\t\t\t\t\t\tValue: val,\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\t// we need to go deeper!\n\t\t\t\t\tif end < len(path) {\n\t\t\t\t\t\tif len(n.children) > 0 {\n\t\t\t\t\t\t\tpath = path[end:]\n\t\t\t\t\t\t\tn = n.children[0]\n\t\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\t// ... but we can't\n\t\t\t\t\t\tvalue.tsr = len(path) == end+1\n\t\t\t\t\t\treturn value\n\t\t\t\t\t}\n\n\t\t\t\t\tif value.handlers = n.handlers; value.handlers != nil {\n\t\t\t\t\t\tvalue.fullPath = n.fullPath\n\t\t\t\t\t\treturn value\n\t\t\t\t\t}\n\t\t\t\t\tif len(n.children) == 1 {\n\t\t\t\t\t\t// No handle found. Check if a handle for this path + a\n\t\t\t\t\t\t// trailing slash exists for TSR recommendation\n\t\t\t\t\t\tn = n.children[0]\n\t\t\t\t\t\tvalue.tsr = (n.path == \"/\" && n.handlers != nil) || (n.path == \"\" && n.indices == \"/\")\n\t\t\t\t\t}\n\t\t\t\t\treturn value\n\n\t\t\t\tcase catchAll:\n\t\t\t\t\t// Save param value\n\t\t\t\t\tif params != nil {\n\t\t\t\t\t\t// Preallocate capacity if necessary\n\t\t\t\t\t\tif cap(*params) < int(globalParamsCount) {\n\t\t\t\t\t\t\tnewParams := make(Params, len(*params), globalParamsCount)\n\t\t\t\t\t\t\tcopy(newParams, *params)\n\t\t\t\t\t\t\t*params = newParams\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tif value.params == nil {\n\t\t\t\t\t\t\tvalue.params = params\n\t\t\t\t\t\t}\n\t\t\t\t\t\t// Expand slice within preallocated capacity\n\t\t\t\t\t\ti := len(*value.params)\n\t\t\t\t\t\t*value.params = (*value.params)[:i+1]\n\t\t\t\t\t\tval := path\n\t\t\t\t\t\tif unescape {\n\t\t\t\t\t\t\tif v, err := url.QueryUnescape(path); err == nil {\n\t\t\t\t\t\t\t\tval = v\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t\t(*value.params)[i] = Param{\n\t\t\t\t\t\t\tKey:   n.path[2:],\n\t\t\t\t\t\t\tValue: val,\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\tvalue.handlers = n.handlers\n\t\t\t\t\tvalue.fullPath = n.fullPath\n\t\t\t\t\treturn value\n\n\t\t\t\tdefault:\n\t\t\t\t\tpanic(\"invalid node type\")\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\n\t\tif path == prefix {\n\t\t\t// If the current path does not equal '/' and the node does not have a registered handle and the most recently matched node has a child node\n\t\t\t// the current node needs to roll back to last valid skippedNode\n\t\t\tif n.handlers == nil && path != \"/\" {\n\t\t\t\tfor length := len(*skippedNodes); length > 0; length-- {\n\t\t\t\t\tskippedNode := (*skippedNodes)[length-1]\n\t\t\t\t\t*skippedNodes = (*skippedNodes)[:length-1]\n\t\t\t\t\tif strings.HasSuffix(skippedNode.path, path) {\n\t\t\t\t\t\tpath = skippedNode.path\n\t\t\t\t\t\tn = skippedNode.node\n\t\t\t\t\t\tif value.params != nil {\n\t\t\t\t\t\t\t*value.params = (*value.params)[:skippedNode.paramsCount]\n\t\t\t\t\t\t}\n\t\t\t\t\t\tglobalParamsCount = skippedNode.paramsCount\n\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t//\tn = latestNode.children[len(latestNode.children)-1]\n\t\t\t}\n\t\t\t// We should have reached the node containing the handle.\n\t\t\t// Check if this node has a handle registered.\n\t\t\tif value.handlers = n.handlers; value.handlers != nil {\n\t\t\t\tvalue.fullPath = n.fullPath\n\t\t\t\treturn value\n\t\t\t}\n\n\t\t\t// If there is no handle for this route, but this route has a\n\t\t\t// wildcard child, there must be a handle for this path with an\n\t\t\t// additional trailing slash\n\t\t\tif path == \"/\" && n.wildChild && n.nType != root {\n\t\t\t\tvalue.tsr = true\n\t\t\t\treturn value\n\t\t\t}\n\n\t\t\tif path == \"/\" && n.nType == static {\n\t\t\t\tvalue.tsr = true\n\t\t\t\treturn value\n\t\t\t}\n\n\t\t\t// No handle found. Check if a handle for this path + a\n\t\t\t// trailing slash exists for trailing slash recommendation\n\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\tif c == '/' {\n\t\t\t\t\tn = n.children[i]\n\t\t\t\t\tvalue.tsr = (len(n.path) == 1 && n.handlers != nil) ||\n\t\t\t\t\t\t(n.nType == catchAll && n.children[0].handlers != nil)\n\t\t\t\t\treturn value\n\t\t\t\t}\n\t\t\t}\n\n\t\t\treturn value\n\t\t}\n\n\t\t// Nothing found. We can recommend to redirect to the same URL with an\n\t\t// extra trailing slash if a leaf exists for that path\n\t\tvalue.tsr = path == \"/\" ||\n\t\t\t(len(prefix) == len(path)+1 && prefix[len(path)] == '/' &&\n\t\t\t\tpath == prefix[:len(prefix)-1] && n.handlers != nil)\n\n\t\t// roll back to last valid skippedNode\n\t\tif !value.tsr && path != \"/\" {\n\t\t\tfor length := len(*skippedNodes); length > 0; length-- {\n\t\t\t\tskippedNode := (*skippedNodes)[length-1]\n\t\t\t\t*skippedNodes = (*skippedNodes)[:length-1]\n\t\t\t\tif strings.HasSuffix(skippedNode.path, path) {\n\t\t\t\t\tpath = skippedNode.path\n\t\t\t\t\tn = skippedNode.node\n\t\t\t\t\tif value.params != nil {\n\t\t\t\t\t\t*value.params = (*value.params)[:skippedNode.paramsCount]\n\t\t\t\t\t}\n\t\t\t\t\tglobalParamsCount = skippedNode.paramsCount\n\t\t\t\t\tcontinue walk\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\n\t\treturn value\n\t}\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "hash": "e8f24969d59611428b03d02424b8f4bb55a1ef91",
+      "message": "feat(routergroup): include HTTP QUERY method in Any (#4878)",
+      "files": [
+        {
+          "file": "routergroup.go",
+          "change_type": "ZERO_DELTA",
+          "nodes_before": 49,
+          "edges_before": 55,
+          "anchors_before": 0,
+          "nodes_after": 49,
+          "edges_after": 55,
+          "anchors_after": 0,
+          "added_nodes": 0,
+          "removed_nodes": 0,
+          "added_edges": 0,
+          "removed_edges": 0,
+          "modified_funcs": 0,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "_無任何現存函式發生實作變更_"
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "hash": "1bd0ecf2d3e08da37efa270bb7be20c1eddb0d68",
+      "message": "fix(context): load Keys under the mutex in Copy (#4854)",
+      "files": [
+        {
+          "file": "context.go",
+          "change_type": "BODY_LEVEL_SEMANTIC_DELTA",
+          "nodes_before": 244,
+          "edges_before": 260,
+          "anchors_before": 0,
+          "nodes_after": 244,
+          "edges_after": 260,
+          "anchors_after": 0,
+          "added_nodes": 0,
+          "removed_nodes": 0,
+          "added_edges": 0,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `Context.Copy()`\n- **變更前簽章 (Before)**: `func Context.Copy()` (L122~L155)\n- **變更後簽章 (After)**: `func Context.Copy()` (L122~L154)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (c *Context) Copy() *Context {\n\tcp := Context{\n\t\twritermem: c.writermem,\n\t\tRequest:   c.Request,\n\t\tengine:    c.engine,\n\t}\n\n\tcp.writermem.ResponseWriter = nil\n\tcp.Writer = &cp.writermem\n\tcp.index = abortIndex\n\tcp.handlers = nil\n\tcp.fullPath = c.fullPath\n\n\tcKeys := c.Keys\n\tc.mu.RLock()\n\tcp.Keys = maps.Clone(cKeys)\n\tc.mu.RUnlock()\n\n\tcParams := c.Params\n\tcp.Params = make([]Param, len(cParams))\n\tcopy(cp.Params, cParams)\n\n\tif c.Errors != nil {\n\t\tcp.Errors = make(errorMsgs, len(c.Errors))\n\t\tcopy(cp.Errors, c.Errors)\n\t}\n\n\tif c.Accepted != nil {\n\t\tcp.Accepted = make([]string, len(c.Accepted))\n\t\tcopy(cp.Accepted, c.Accepted)\n\t}\n\n\treturn &cp\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (c *Context) Copy() *Context {\n\tcp := Context{\n\t\twritermem: c.writermem,\n\t\tRequest:   c.Request,\n\t\tengine:    c.engine,\n\t}\n\n\tcp.writermem.ResponseWriter = nil\n\tcp.Writer = &cp.writermem\n\tcp.index = abortIndex\n\tcp.handlers = nil\n\tcp.fullPath = c.fullPath\n\n\tc.mu.RLock()\n\tcp.Keys = maps.Clone(c.Keys)\n\tc.mu.RUnlock()\n\n\tcParams := c.Params\n\tcp.Params = make([]Param, len(cParams))\n\tcopy(cp.Params, cParams)\n\n\tif c.Errors != nil {\n\t\tcp.Errors = make(errorMsgs, len(c.Errors))\n\t\tcopy(cp.Errors, c.Errors)\n\t}\n\n\tif c.Accepted != nil {\n\t\tcp.Accepted = make([]string, len(c.Accepted))\n\t\tcopy(cp.Accepted, c.Accepted)\n\t}\n\n\treturn &cp\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "hash": "3b08cd7235bd5ad2f055aa9e38135f111f6c5926",
+      "message": "fix: reset skipped-nodes stack on getValue entry to prevent slice overflow panic [#4818] (#4819)",
+      "files": [
+        {
+          "file": "tree.go",
+          "change_type": "BODY_LEVEL_SEMANTIC_DELTA",
+          "nodes_before": 52,
+          "edges_before": 53,
+          "anchors_before": 0,
+          "nodes_after": 52,
+          "edges_after": 53,
+          "anchors_after": 0,
+          "added_nodes": 0,
+          "removed_nodes": 0,
+          "added_edges": 0,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `node.getValue()`\n- **變更前簽章 (Before)**: `func node.getValue(path string, params *Params, skippedNodes *[]skippedNode, unescape bool)` (L418~L665)\n- **變更後簽章 (After)**: `func node.getValue(path string, params *Params, skippedNodes *[]skippedNode, unescape bool)` (L418~L673)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (n *node) getValue(path string, params *Params, skippedNodes *[]skippedNode, unescape bool) (value nodeValue) {\n\tvar globalParamsCount int16\n\nwalk: // Outer loop for walking the tree\n\tfor {\n\t\tprefix := n.path\n\t\tif len(path) > len(prefix) {\n\t\t\tif path[:len(prefix)] == prefix {\n\t\t\t\tpath = path[len(prefix):]\n\n\t\t\t\t// Try all the non-wildcard children first by matching the indices\n\t\t\t\tidxc := path[0]\n\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\t//  strings.HasPrefix(n.children[len(n.children)-1].path, \":\") == n.wildChild\n\t\t\t\t\t\tif n.wildChild {\n\t\t\t\t\t\t\tindex := len(*skippedNodes)\n\t\t\t\t\t\t\t*skippedNodes = (*skippedNodes)[:index+1]\n\t\t\t\t\t\t\t(*skippedNodes)[index] = skippedNode{\n\t\t\t\t\t\t\t\tpath: prefix + path,\n\t\t\t\t\t\t\t\tnode: &node{\n\t\t\t\t\t\t\t\t\tpath:      n.path,\n\t\t\t\t\t\t\t\t\twildChild: n.wildChild,\n\t\t\t\t\t\t\t\t\tnType:     n.nType,\n\t\t\t\t\t\t\t\t\tpriority:  n.priority,\n\t\t\t\t\t\t\t\t\tchildren:  n.children,\n\t\t\t\t\t\t\t\t\thandlers:  n.handlers,\n\t\t\t\t\t\t\t\t\tfullPath:  n.fullPath,\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\tparamsCount: globalParamsCount,\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tn = n.children[i]\n\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\tif !n.wildChild {\n\t\t\t\t\t// If the path at the end of the loop is not equal to '/' and the current node has no child nodes\n\t\t\t\t\t// the current node needs to roll back to last valid skippedNode\n\t\t\t\t\tif path != \"/\" {\n\t\t\t\t\t\tfor length := len(*skippedNodes); length > 0; length-- {\n\t\t\t\t\t\t\tskippedNode := (*skippedNodes)[length-1]\n\t\t\t\t\t\t\t*skippedNodes = (*skippedNodes)[:length-1]\n\t\t\t\t\t\t\tif strings.HasSuffix(skippedNode.path, path) {\n\t\t\t\t\t\t\t\tpath = skippedNode.path\n\t\t\t\t\t\t\t\tn = skippedNode.node\n\t\t\t\t\t\t\t\tif value.params != nil {\n\t\t\t\t\t\t\t\t\t*value.params = (*value.params)[:skippedNode.paramsCount]\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tglobalParamsCount = skippedNode.paramsCount\n\t\t\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\t// Nothing found.\n\t\t\t\t\t// We can recommend to redirect to the same URL without a\n\t\t\t\t\t// trailing slash if a leaf exists for that path.\n\t\t\t\t\tvalue.tsr = path == \"/\" && n.handlers != nil\n\t\t\t\t\treturn value\n\t\t\t\t}\n\n\t\t\t\t// Handle wildcard child, which is always at the end of the array\n\t\t\t\tn = n.children[len(n.children)-1]\n\t\t\t\tglobalParamsCount++\n\n\t\t\t\tswitch n.nType {\n\t\t\t\tcase param:\n\t\t\t\t\t// fix truncate the parameter\n\t\t\t\t\t// tree_test.go  line: 204\n\n\t\t\t\t\t// Find param end (either '/' or path end)\n\t\t\t\t\tend := 0\n\t\t\t\t\tfor end < len(path) && path[end] != '/' {\n\t\t\t\t\t\tend++\n\t\t\t\t\t}\n\n\t\t\t\t\t// Save param value\n\t\t\t\t\tif params != nil {\n\t\t\t\t\t\t// Preallocate capacity if necessary\n\t\t\t\t\t\tif cap(*params) < int(globalParamsCount) {\n\t\t\t\t\t\t\tnewParams := make(Params, len(*params), globalParamsCount)\n\t\t\t\t\t\t\tcopy(newParams, *params)\n\t\t\t\t\t\t\t*params = newParams\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tif value.params == nil {\n\t\t\t\t\t\t\tvalue.params = params\n\t\t\t\t\t\t}\n\t\t\t\t\t\t// Expand slice within preallocated capacity\n\t\t\t\t\t\ti := len(*value.params)\n\t\t\t\t\t\t*value.params = (*value.params)[:i+1]\n\t\t\t\t\t\tval := path[:end]\n\t\t\t\t\t\tif unescape {\n\t\t\t\t\t\t\tif v, err := url.QueryUnescape(val); err == nil {\n\t\t\t\t\t\t\t\tval = v\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t\t(*value.params)[i] = Param{\n\t\t\t\t\t\t\tKey:   n.path[1:],\n\t\t\t\t\t\t\tValue: val,\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\t// we need to go deeper!\n\t\t\t\t\tif end < len(path) {\n\t\t\t\t\t\tif len(n.children) > 0 {\n\t\t\t\t\t\t\tpath = path[end:]\n\t\t\t\t\t\t\tn = n.children[0]\n\t\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\t// ... but we can't\n\t\t\t\t\t\tvalue.tsr = len(path) == end+1\n\t\t\t\t\t\treturn value\n\t\t\t\t\t}\n\n\t\t\t\t\tif value.handlers = n.handlers; value.handlers != nil {\n\t\t\t\t\t\tvalue.fullPath = n.fullPath\n\t\t\t\t\t\treturn value\n\t\t\t\t\t}\n\t\t\t\t\tif len(n.children) == 1 {\n\t\t\t\t\t\t// No handle found. Check if a handle for this path + a\n\t\t\t\t\t\t// trailing slash exists for TSR recommendation\n\t\t\t\t\t\tn = n.children[0]\n\t\t\t\t\t\tvalue.tsr = (n.path == \"/\" && n.handlers != nil) || (n.path == \"\" && n.indices == \"/\")\n\t\t\t\t\t}\n\t\t\t\t\treturn value\n\n\t\t\t\tcase catchAll:\n\t\t\t\t\t// Save param value\n\t\t\t\t\tif params != nil {\n\t\t\t\t\t\t// Preallocate capacity if necessary\n\t\t\t\t\t\tif cap(*params) < int(globalParamsCount) {\n\t\t\t\t\t\t\tnewParams := make(Params, len(*params), globalParamsCount)\n\t\t\t\t\t\t\tcopy(newParams, *params)\n\t\t\t\t\t\t\t*params = newParams\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tif value.params == nil {\n\t\t\t\t\t\t\tvalue.params = params\n\t\t\t\t\t\t}\n\t\t\t\t\t\t// Expand slice within preallocated capacity\n\t\t\t\t\t\ti := len(*value.params)\n\t\t\t\t\t\t*value.params = (*value.params)[:i+1]\n\t\t\t\t\t\tval := path\n\t\t\t\t\t\tif unescape {\n\t\t\t\t\t\t\tif v, err := url.QueryUnescape(path); err == nil {\n\t\t\t\t\t\t\t\tval = v\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t\t(*value.params)[i] = Param{\n\t\t\t\t\t\t\tKey:   n.path[2:],\n\t\t\t\t\t\t\tValue: val,\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\tvalue.handlers = n.handlers\n\t\t\t\t\tvalue.fullPath = n.fullPath\n\t\t\t\t\treturn value\n\n\t\t\t\tdefault:\n\t\t\t\t\tpanic(\"invalid node type\")\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\n\t\tif path == prefix {\n\t\t\t// If the current path does not equal '/' and the node does not have a registered handle and the most recently matched node has a child node\n\t\t\t// the current node needs to roll back to last valid skippedNode\n\t\t\tif n.handlers == nil && path != \"/\" {\n\t\t\t\tfor length := len(*skippedNodes); length > 0; length-- {\n\t\t\t\t\tskippedNode := (*skippedNodes)[length-1]\n\t\t\t\t\t*skippedNodes = (*skippedNodes)[:length-1]\n\t\t\t\t\tif strings.HasSuffix(skippedNode.path, path) {\n\t\t\t\t\t\tpath = skippedNode.path\n\t\t\t\t\t\tn = skippedNode.node\n\t\t\t\t\t\tif value.params != nil {\n\t\t\t\t\t\t\t*value.params = (*value.params)[:skippedNode.paramsCount]\n\t\t\t\t\t\t}\n\t\t\t\t\t\tglobalParamsCount = skippedNode.paramsCount\n\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t//\tn = latestNode.children[len(latestNode.children)-1]\n\t\t\t}\n\t\t\t// We should have reached the node containing the handle.\n\t\t\t// Check if this node has a handle registered.\n\t\t\tif value.handlers = n.handlers; value.handlers != nil {\n\t\t\t\tvalue.fullPath = n.fullPath\n\t\t\t\treturn value\n\t\t\t}\n\n\t\t\t// If there is no handle for this route, but this route has a\n\t\t\t// wildcard child, there must be a handle for this path with an\n\t\t\t// additional trailing slash\n\t\t\tif path == \"/\" && n.wildChild && n.nType != root {\n\t\t\t\tvalue.tsr = true\n\t\t\t\treturn value\n\t\t\t}\n\n\t\t\tif path == \"/\" && n.nType == static {\n\t\t\t\tvalue.tsr = true\n\t\t\t\treturn value\n\t\t\t}\n\n\t\t\t// No handle found. Check if a handle for this path + a\n\t\t\t// trailing slash exists for trailing slash recommendation\n\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\tif c == '/' {\n\t\t\t\t\tn = n.children[i]\n\t\t\t\t\tvalue.tsr = (len(n.path) == 1 && n.handlers != nil) ||\n\t\t\t\t\t\t(n.nType == catchAll && n.children[0].handlers != nil)\n\t\t\t\t\treturn value\n\t\t\t\t}\n\t\t\t}\n\n\t\t\treturn value\n\t\t}\n\n\t\t// Nothing found. We can recommend to redirect to the same URL with an\n\t\t// extra trailing slash if a leaf exists for that path\n\t\tvalue.tsr = path == \"/\" ||\n\t\t\t(len(prefix) == len(path)+1 && prefix[len(path)] == '/' &&\n\t\t\t\tpath == prefix[:len(prefix)-1] && n.handlers != nil)\n\n\t\t// roll back to last valid skippedNode\n\t\tif !value.tsr && path != \"/\" {\n\t\t\tfor length := len(*skippedNodes); length > 0; length-- {\n\t\t\t\tskippedNode := (*skippedNodes)[length-1]\n\t\t\t\t*skippedNodes = (*skippedNodes)[:length-1]\n\t\t\t\tif strings.HasSuffix(skippedNode.path, path) {\n\t\t\t\t\tpath = skippedNode.path\n\t\t\t\t\tn = skippedNode.node\n\t\t\t\t\tif value.params != nil {\n\t\t\t\t\t\t*value.params = (*value.params)[:skippedNode.paramsCount]\n\t\t\t\t\t}\n\t\t\t\t\tglobalParamsCount = skippedNode.paramsCount\n\t\t\t\t\tcontinue walk\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\n\t\treturn value\n\t}\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (n *node) getValue(path string, params *Params, skippedNodes *[]skippedNode, unescape bool) (value nodeValue) {\n\tvar globalParamsCount int16\n\n\t// Reset the skipped-nodes stack on entry. getValue is called once per\n\t// method tree (e.g. in the HandleMethodNotAllowed loop) reusing the same\n\t// pooled Context stack, and the walk below grows it via a raw reslice that\n\t// cannot exceed engine.maxSections. Without this reset the residue from a\n\t// previous tree leaks into the next call and can panic with \"slice bounds\n\t// out of range\" once the accumulated length passes the capacity.\n\t*skippedNodes = (*skippedNodes)[:0]\n\nwalk: // Outer loop for walking the tree\n\tfor {\n\t\tprefix := n.path\n\t\tif len(path) > len(prefix) {\n\t\t\tif path[:len(prefix)] == prefix {\n\t\t\t\tpath = path[len(prefix):]\n\n\t\t\t\t// Try all the non-wildcard children first by matching the indices\n\t\t\t\tidxc := path[0]\n\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\t//  strings.HasPrefix(n.children[len(n.children)-1].path, \":\") == n.wildChild\n\t\t\t\t\t\tif n.wildChild {\n\t\t\t\t\t\t\tindex := len(*skippedNodes)\n\t\t\t\t\t\t\t*skippedNodes = (*skippedNodes)[:index+1]\n\t\t\t\t\t\t\t(*skippedNodes)[index] = skippedNode{\n\t\t\t\t\t\t\t\tpath: prefix + path,\n\t\t\t\t\t\t\t\tnode: &node{\n\t\t\t\t\t\t\t\t\tpath:      n.path,\n\t\t\t\t\t\t\t\t\twildChild: n.wildChild,\n\t\t\t\t\t\t\t\t\tnType:     n.nType,\n\t\t\t\t\t\t\t\t\tpriority:  n.priority,\n\t\t\t\t\t\t\t\t\tchildren:  n.children,\n\t\t\t\t\t\t\t\t\thandlers:  n.handlers,\n\t\t\t\t\t\t\t\t\tfullPath:  n.fullPath,\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\tparamsCount: globalParamsCount,\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tn = n.children[i]\n\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\tif !n.wildChild {\n\t\t\t\t\t// If the path at the end of the loop is not equal to '/' and the current node has no child nodes\n\t\t\t\t\t// the current node needs to roll back to last valid skippedNode\n\t\t\t\t\tif path != \"/\" {\n\t\t\t\t\t\tfor length := len(*skippedNodes); length > 0; length-- {\n\t\t\t\t\t\t\tskippedNode := (*skippedNodes)[length-1]\n\t\t\t\t\t\t\t*skippedNodes = (*skippedNodes)[:length-1]\n\t\t\t\t\t\t\tif strings.HasSuffix(skippedNode.path, path) {\n\t\t\t\t\t\t\t\tpath = skippedNode.path\n\t\t\t\t\t\t\t\tn = skippedNode.node\n\t\t\t\t\t\t\t\tif value.params != nil {\n\t\t\t\t\t\t\t\t\t*value.params = (*value.params)[:skippedNode.paramsCount]\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\tglobalParamsCount = skippedNode.paramsCount\n\t\t\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\t// Nothing found.\n\t\t\t\t\t// We can recommend to redirect to the same URL without a\n\t\t\t\t\t// trailing slash if a leaf exists for that path.\n\t\t\t\t\tvalue.tsr = path == \"/\" && n.handlers != nil\n\t\t\t\t\treturn value\n\t\t\t\t}\n\n\t\t\t\t// Handle wildcard child, which is always at the end of the array\n\t\t\t\tn = n.children[len(n.children)-1]\n\t\t\t\tglobalParamsCount++\n\n\t\t\t\tswitch n.nType {\n\t\t\t\tcase param:\n\t\t\t\t\t// fix truncate the parameter\n\t\t\t\t\t// tree_test.go  line: 204\n\n\t\t\t\t\t// Find param end (either '/' or path end)\n\t\t\t\t\tend := 0\n\t\t\t\t\tfor end < len(path) && path[end] != '/' {\n\t\t\t\t\t\tend++\n\t\t\t\t\t}\n\n\t\t\t\t\t// Save param value\n\t\t\t\t\tif params != nil {\n\t\t\t\t\t\t// Preallocate capacity if necessary\n\t\t\t\t\t\tif cap(*params) < int(globalParamsCount) {\n\t\t\t\t\t\t\tnewParams := make(Params, len(*params), globalParamsCount)\n\t\t\t\t\t\t\tcopy(newParams, *params)\n\t\t\t\t\t\t\t*params = newParams\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tif value.params == nil {\n\t\t\t\t\t\t\tvalue.params = params\n\t\t\t\t\t\t}\n\t\t\t\t\t\t// Expand slice within preallocated capacity\n\t\t\t\t\t\ti := len(*value.params)\n\t\t\t\t\t\t*value.params = (*value.params)[:i+1]\n\t\t\t\t\t\tval := path[:end]\n\t\t\t\t\t\tif unescape {\n\t\t\t\t\t\t\tif v, err := url.QueryUnescape(val); err == nil {\n\t\t\t\t\t\t\t\tval = v\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t\t(*value.params)[i] = Param{\n\t\t\t\t\t\t\tKey:   n.path[1:],\n\t\t\t\t\t\t\tValue: val,\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\t// we need to go deeper!\n\t\t\t\t\tif end < len(path) {\n\t\t\t\t\t\tif len(n.children) > 0 {\n\t\t\t\t\t\t\tpath = path[end:]\n\t\t\t\t\t\t\tn = n.children[0]\n\t\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\t// ... but we can't\n\t\t\t\t\t\tvalue.tsr = len(path) == end+1\n\t\t\t\t\t\treturn value\n\t\t\t\t\t}\n\n\t\t\t\t\tif value.handlers = n.handlers; value.handlers != nil {\n\t\t\t\t\t\tvalue.fullPath = n.fullPath\n\t\t\t\t\t\treturn value\n\t\t\t\t\t}\n\t\t\t\t\tif len(n.children) == 1 {\n\t\t\t\t\t\t// No handle found. Check if a handle for this path + a\n\t\t\t\t\t\t// trailing slash exists for TSR recommendation\n\t\t\t\t\t\tn = n.children[0]\n\t\t\t\t\t\tvalue.tsr = (n.path == \"/\" && n.handlers != nil) || (n.path == \"\" && n.indices == \"/\")\n\t\t\t\t\t}\n\t\t\t\t\treturn value\n\n\t\t\t\tcase catchAll:\n\t\t\t\t\t// Save param value\n\t\t\t\t\tif params != nil {\n\t\t\t\t\t\t// Preallocate capacity if necessary\n\t\t\t\t\t\tif cap(*params) < int(globalParamsCount) {\n\t\t\t\t\t\t\tnewParams := make(Params, len(*params), globalParamsCount)\n\t\t\t\t\t\t\tcopy(newParams, *params)\n\t\t\t\t\t\t\t*params = newParams\n\t\t\t\t\t\t}\n\n\t\t\t\t\t\tif value.params == nil {\n\t\t\t\t\t\t\tvalue.params = params\n\t\t\t\t\t\t}\n\t\t\t\t\t\t// Expand slice within preallocated capacity\n\t\t\t\t\t\ti := len(*value.params)\n\t\t\t\t\t\t*value.params = (*value.params)[:i+1]\n\t\t\t\t\t\tval := path\n\t\t\t\t\t\tif unescape {\n\t\t\t\t\t\t\tif v, err := url.QueryUnescape(path); err == nil {\n\t\t\t\t\t\t\t\tval = v\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t\t(*value.params)[i] = Param{\n\t\t\t\t\t\t\tKey:   n.path[2:],\n\t\t\t\t\t\t\tValue: val,\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\tvalue.handlers = n.handlers\n\t\t\t\t\tvalue.fullPath = n.fullPath\n\t\t\t\t\treturn value\n\n\t\t\t\tdefault:\n\t\t\t\t\tpanic(\"invalid node type\")\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\n\t\tif path == prefix {\n\t\t\t// If the current path does not equal '/' and the node does not have a registered handle and the most recently matched node has a child node\n\t\t\t// the current node needs to roll back to last valid skippedNode\n\t\t\tif n.handlers == nil && path != \"/\" {\n\t\t\t\tfor length := len(*skippedNodes); length > 0; length-- {\n\t\t\t\t\tskippedNode := (*skippedNodes)[length-1]\n\t\t\t\t\t*skippedNodes = (*skippedNodes)[:length-1]\n\t\t\t\t\tif strings.HasSuffix(skippedNode.path, path) {\n\t\t\t\t\t\tpath = skippedNode.path\n\t\t\t\t\t\tn = skippedNode.node\n\t\t\t\t\t\tif value.params != nil {\n\t\t\t\t\t\t\t*value.params = (*value.params)[:skippedNode.paramsCount]\n\t\t\t\t\t\t}\n\t\t\t\t\t\tglobalParamsCount = skippedNode.paramsCount\n\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t//\tn = latestNode.children[len(latestNode.children)-1]\n\t\t\t}\n\t\t\t// We should have reached the node containing the handle.\n\t\t\t// Check if this node has a handle registered.\n\t\t\tif value.handlers = n.handlers; value.handlers != nil {\n\t\t\t\tvalue.fullPath = n.fullPath\n\t\t\t\treturn value\n\t\t\t}\n\n\t\t\t// If there is no handle for this route, but this route has a\n\t\t\t// wildcard child, there must be a handle for this path with an\n\t\t\t// additional trailing slash\n\t\t\tif path == \"/\" && n.wildChild && n.nType != root {\n\t\t\t\tvalue.tsr = true\n\t\t\t\treturn value\n\t\t\t}\n\n\t\t\tif path == \"/\" && n.nType == static {\n\t\t\t\tvalue.tsr = true\n\t\t\t\treturn value\n\t\t\t}\n\n\t\t\t// No handle found. Check if a handle for this path + a\n\t\t\t// trailing slash exists for trailing slash recommendation\n\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\tif c == '/' {\n\t\t\t\t\tn = n.children[i]\n\t\t\t\t\tvalue.tsr = (len(n.path) == 1 && n.handlers != nil) ||\n\t\t\t\t\t\t(n.nType == catchAll && n.children[0].handlers != nil)\n\t\t\t\t\treturn value\n\t\t\t\t}\n\t\t\t}\n\n\t\t\treturn value\n\t\t}\n\n\t\t// Nothing found. We can recommend to redirect to the same URL with an\n\t\t// extra trailing slash if a leaf exists for that path\n\t\tvalue.tsr = path == \"/\" ||\n\t\t\t(len(prefix) == len(path)+1 && prefix[len(path)] == '/' &&\n\t\t\t\tpath == prefix[:len(prefix)-1] && n.handlers != nil)\n\n\t\t// roll back to last valid skippedNode\n\t\tif !value.tsr && path != \"/\" {\n\t\t\tfor length := len(*skippedNodes); length > 0; length-- {\n\t\t\t\tskippedNode := (*skippedNodes)[length-1]\n\t\t\t\t*skippedNodes = (*skippedNodes)[:length-1]\n\t\t\t\tif strings.HasSuffix(skippedNode.path, path) {\n\t\t\t\t\tpath = skippedNode.path\n\t\t\t\t\tn = skippedNode.node\n\t\t\t\t\tif value.params != nil {\n\t\t\t\t\t\t*value.params = (*value.params)[:skippedNode.paramsCount]\n\t\t\t\t\t}\n\t\t\t\t\tglobalParamsCount = skippedNode.paramsCount\n\t\t\t\t\tcontinue walk\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\n\t\treturn value\n\t}\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "hash": "d8f2d588d7573b3438cfc95b7a47f9ec8966273c",
+      "message": "fix(engine): add default ReadHeaderTimeout to http.Server in Run methods (#4800)",
+      "files": [
+        {
+          "file": "gin.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 125,
+          "edges_before": 175,
+          "anchors_before": 0,
+          "nodes_after": 127,
+          "edges_after": 178,
+          "anchors_after": 0,
+          "added_nodes": 2,
+          "removed_nodes": 0,
+          "added_edges": 3,
+          "removed_edges": 0,
+          "modified_funcs": 4,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增節點] `defaultReadHeaderTimeout` (MODULE_STATE)\n  • + [新增節點] `Engine.getReadHeaderTimeout` (FUNCTION_DEF)\n  • + [新增呼叫邊] `Engine.Run` ──[CALLS]──> `Engine.getReadHeaderTimeout`\n  • + [新增呼叫邊] `Engine.RunTLS` ──[CALLS]──> `Engine.getReadHeaderTimeout`\n  • + [新增呼叫邊] `Engine.RunListener` ──[CALLS]──> `Engine.getReadHeaderTimeout`\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `Engine.RunTLS()`\n- **變更前簽章 (Before)**: `func Engine.RunTLS(addr, certFile, keyFile string)` (L561~L576)\n- **變更後簽章 (After)**: `func Engine.RunTLS(addr, certFile, keyFile string)` (L588~L604)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (engine *Engine) RunTLS(addr, certFile, keyFile string) (err error) {\n\tdebugPrint(\"Listening and serving HTTPS on %s\\n\", addr)\n\tdefer func() { debugPrintError(err) }()\n\n\tif engine.isUnsafeTrustedProxies() {\n\t\tdebugPrint(\"[WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.\\n\" +\n\t\t\t\"Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.\")\n\t}\n\n\tserver := &http.Server{ // #nosec G112\n\t\tAddr:    addr,\n\t\tHandler: engine.Handler(),\n\t}\n\terr = server.ListenAndServeTLS(certFile, keyFile)\n\treturn\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (engine *Engine) RunTLS(addr, certFile, keyFile string) (err error) {\n\tdebugPrint(\"Listening and serving HTTPS on %s\\n\", addr)\n\tdefer func() { debugPrintError(err) }()\n\n\tif engine.isUnsafeTrustedProxies() {\n\t\tdebugPrint(\"[WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.\\n\" +\n\t\t\t\"Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.\")\n\t}\n\n\tserver := &http.Server{ // #nosec G112\n\t\tAddr:              addr,\n\t\tHandler:           engine.Handler(),\n\t\tReadHeaderTimeout: engine.getReadHeaderTimeout(),\n\t}\n\terr = server.ListenAndServeTLS(certFile, keyFile)\n\treturn\n}\n```\n\n### 🔹 函式: `Engine.RunListener()`\n- **變更前簽章 (Before)**: `func Engine.RunListener(listener net.Listener)` (L645~L659)\n- **變更後簽章 (After)**: `func Engine.RunListener(listener net.Listener)` (L673~L688)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (engine *Engine) RunListener(listener net.Listener) (err error) {\n\tdebugPrint(\"Listening and serving HTTP on listener what's bind with address@%s\", listener.Addr())\n\tdefer func() { debugPrintError(err) }()\n\n\tif engine.isUnsafeTrustedProxies() {\n\t\tdebugPrint(\"[WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.\\n\" +\n\t\t\t\"Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.\")\n\t}\n\n\tserver := &http.Server{ // #nosec G112\n\t\tHandler: engine.Handler(),\n\t}\n\terr = server.Serve(listener)\n\treturn\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (engine *Engine) RunListener(listener net.Listener) (err error) {\n\tdebugPrint(\"Listening and serving HTTP on listener what's bind with address@%s\", listener.Addr())\n\tdefer func() { debugPrintError(err) }()\n\n\tif engine.isUnsafeTrustedProxies() {\n\t\tdebugPrint(\"[WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.\\n\" +\n\t\t\t\"Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.\")\n\t}\n\n\tserver := &http.Server{ // #nosec G112\n\t\tHandler:           engine.Handler(),\n\t\tReadHeaderTimeout: engine.getReadHeaderTimeout(),\n\t}\n\terr = server.Serve(listener)\n\treturn\n}\n```\n\n### 🔹 函式: `Engine.Run()`\n- **變更前簽章 (Before)**: `func Engine.Run(addr ...string)` (L540~L556)\n- **變更後簽章 (After)**: `func Engine.Run(addr ...string)` (L566~L583)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (engine *Engine) Run(addr ...string) (err error) {\n\tdefer func() { debugPrintError(err) }()\n\n\tif engine.isUnsafeTrustedProxies() {\n\t\tdebugPrint(\"[WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.\\n\" +\n\t\t\t\"Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.\")\n\t}\n\tengine.updateRouteTrees()\n\taddress := resolveAddress(addr)\n\tdebugPrint(\"Listening and serving HTTP on %s\\n\", address)\n\tserver := &http.Server{ // #nosec G112\n\t\tAddr:    address,\n\t\tHandler: engine.Handler(),\n\t}\n\terr = server.ListenAndServe()\n\treturn\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (engine *Engine) Run(addr ...string) (err error) {\n\tdefer func() { debugPrintError(err) }()\n\n\tif engine.isUnsafeTrustedProxies() {\n\t\tdebugPrint(\"[WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.\\n\" +\n\t\t\t\"Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.\")\n\t}\n\tengine.updateRouteTrees()\n\taddress := resolveAddress(addr)\n\tdebugPrint(\"Listening and serving HTTP on %s\\n\", address)\n\tserver := &http.Server{ // #nosec G112\n\t\tAddr:              address,\n\t\tHandler:           engine.Handler(),\n\t\tReadHeaderTimeout: engine.getReadHeaderTimeout(),\n\t}\n\terr = server.ListenAndServe()\n\treturn\n}\n```\n\n### 🔹 函式: `New()`\n- **變更前簽章 (Before)**: `func New(opts ...OptionFunc)` (L202~L233)\n- **變更後簽章 (After)**: `func New(opts ...OptionFunc)` (L215~L247)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc New(opts ...OptionFunc) *Engine {\n\tdebugPrintWARNINGNew()\n\tengine := &Engine{\n\t\tRouterGroup: RouterGroup{\n\t\t\tHandlers: nil,\n\t\t\tbasePath: \"/\",\n\t\t\troot:     true,\n\t\t},\n\t\tFuncMap:                template.FuncMap{},\n\t\tRedirectTrailingSlash:  true,\n\t\tRedirectFixedPath:      false,\n\t\tHandleMethodNotAllowed: false,\n\t\tForwardedByClientIP:    true,\n\t\tRemoteIPHeaders:        []string{\"X-Forwarded-For\", \"X-Real-IP\"},\n\t\tTrustedPlatform:        defaultPlatform,\n\t\tUseRawPath:             false,\n\t\tUseEscapedPath:         false,\n\t\tRemoveExtraSlash:       false,\n\t\tUnescapePathValues:     true,\n\t\tMaxMultipartMemory:     defaultMultipartMemory,\n\t\ttrees:                  make(methodTrees, 0, 9),\n\t\tdelims:                 render.Delims{Left: \"{{\", Right: \"}}\"},\n\t\tsecureJSONPrefix:       \"while(1);\",\n\t\ttrustedProxies:         []string{\"0.0.0.0/0\", \"::/0\"},\n\t\ttrustedCIDRs:           defaultTrustedCIDRs,\n\t}\n\tengine.engine = engine\n\tengine.pool.New = func() any {\n\t\treturn engine.allocateContext(engine.maxParams)\n\t}\n\treturn engine.With(opts...)\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc New(opts ...OptionFunc) *Engine {\n\tdebugPrintWARNINGNew()\n\tengine := &Engine{\n\t\tRouterGroup: RouterGroup{\n\t\t\tHandlers: nil,\n\t\t\tbasePath: \"/\",\n\t\t\troot:     true,\n\t\t},\n\t\tFuncMap:                template.FuncMap{},\n\t\tRedirectTrailingSlash:  true,\n\t\tRedirectFixedPath:      false,\n\t\tHandleMethodNotAllowed: false,\n\t\tForwardedByClientIP:    true,\n\t\tRemoteIPHeaders:        []string{\"X-Forwarded-For\", \"X-Real-IP\"},\n\t\tTrustedPlatform:        defaultPlatform,\n\t\tUseRawPath:             false,\n\t\tUseEscapedPath:         false,\n\t\tRemoveExtraSlash:       false,\n\t\tUnescapePathValues:     true,\n\t\tMaxMultipartMemory:     defaultMultipartMemory,\n\t\tReadHeaderTimeout:      defaultReadHeaderTimeout,\n\t\ttrees:                  make(methodTrees, 0, 9),\n\t\tdelims:                 render.Delims{Left: \"{{\", Right: \"}}\"},\n\t\tsecureJSONPrefix:       \"while(1);\",\n\t\ttrustedProxies:         []string{\"0.0.0.0/0\", \"::/0\"},\n\t\ttrustedCIDRs:           defaultTrustedCIDRs,\n\t}\n\tengine.engine = engine\n\tengine.pool.New = func() any {\n\t\treturn engine.allocateContext(engine.maxParams)\n\t}\n\treturn engine.With(opts...)\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "hash": "b1f77cf536154f67e3332fc5d0965b891be86606",
+      "message": "feat(gin): add support for the HTTP QUERY method (RFC 10008) (#4806)",
+      "files": [
+        {
+          "file": "ginS/gins.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 27,
+          "edges_before": 50,
+          "anchors_before": 0,
+          "nodes_after": 28,
+          "edges_after": 52,
+          "anchors_after": 0,
+          "added_nodes": 1,
+          "removed_nodes": 0,
+          "added_edges": 2,
+          "removed_edges": 0,
+          "modified_funcs": 0,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增節點] `QUERY` (FUNCTION_DEF)\n  • + [新增呼叫邊] `QUERY` ──[CALLS]──> `QUERY`\n  • + [新增呼叫邊] `QUERY` ──[CALLS]──> `engine (External/Pkg)`\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "_無任何現存函式發生實作變更_"
+        },
+        {
+          "file": "routergroup.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 49,
+          "edges_before": 55,
+          "anchors_before": 0,
+          "nodes_after": 49,
+          "edges_after": 55,
+          "anchors_after": 0,
+          "added_nodes": 1,
+          "removed_nodes": 1,
+          "added_edges": 0,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增節點] `MethodQuery` (MODULE_STATE)\n  • - [移除節點] `_` (MODULE_STATE)\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `RouterGroup.QUERY()`\n- **變更前簽章 (Before)**: `func RouterGroup.QUERY(relativePath string, handlers ...HandlerFunc)` (L150~L152)\n- **變更後簽章 (After)**: `func RouterGroup.QUERY(relativePath string, handlers ...HandlerFunc)` (L176~L178)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (group *RouterGroup) QUERY(relativePath string, handlers ...HandlerFunc) IRoutes {\n\treturn group.handle(\"QUERY\", relativePath, handlers)\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (group *RouterGroup) QUERY(relativePath string, handlers ...HandlerFunc) IRoutes {\n\treturn group.handle(MethodQuery, relativePath, handlers)\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "hash": "5c6a15f8f9566612076bd209e623861bf92a6283",
+      "message": "fix(context): handle missing HTML renderer (#4805)",
+      "files": [
+        {
+          "file": "context.go",
+          "change_type": "BODY_LEVEL_SEMANTIC_DELTA",
+          "nodes_before": 244,
+          "edges_before": 260,
+          "anchors_before": 0,
+          "nodes_after": 244,
+          "edges_after": 260,
+          "anchors_after": 0,
+          "added_nodes": 0,
+          "removed_nodes": 0,
+          "added_edges": 0,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `Context.HTML()`\n- **變更前簽章 (Before)**: `func Context.HTML(code int, name string, obj any)` (L1221~L1224)\n- **變更後簽章 (After)**: `func Context.HTML(code int, name string, obj any)` (L1221~L1229)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (c *Context) HTML(code int, name string, obj any) {\n\tinstance := c.engine.HTMLRender.Instance(name, obj)\n\tc.Render(code, instance)\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (c *Context) HTML(code int, name string, obj any) {\n\tif c.engine.HTMLRender == nil {\n\t\tc.Render(code, render.HTML{})\n\t\treturn\n\t}\n\n\tinstance := c.engine.HTMLRender.Instance(name, obj)\n\tc.Render(code, instance)\n}\n```\n"
+        },
+        {
+          "file": "render/html.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 18,
+          "edges_before": 14,
+          "anchors_before": 0,
+          "nodes_after": 19,
+          "edges_after": 14,
+          "anchors_after": 0,
+          "added_nodes": 1,
+          "removed_nodes": 0,
+          "added_edges": 0,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增節點] `errHTMLRendererNotConfigured` (MODULE_STATE)\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `HTML.Render()`\n- **變更前簽章 (Before)**: `func HTML.Render(w http.ResponseWriter)` (L89~L96)\n- **變更後簽章 (After)**: `func HTML.Render(w http.ResponseWriter)` (L92~L102)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (r HTML) Render(w http.ResponseWriter) error {\n\tr.WriteContentType(w)\n\n\tif r.Name == \"\" {\n\t\treturn r.Template.Execute(w, r.Data)\n\t}\n\treturn r.Template.ExecuteTemplate(w, r.Name, r.Data)\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (r HTML) Render(w http.ResponseWriter) error {\n\tr.WriteContentType(w)\n\tif r.Template == nil {\n\t\treturn errHTMLRendererNotConfigured\n\t}\n\n\tif r.Name == \"\" {\n\t\treturn r.Template.Execute(w, r.Data)\n\t}\n\treturn r.Template.ExecuteTemplate(w, r.Name, r.Data)\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "hash": "2a1a14ff37a26ca6a76763ecc33727c23d9284e9",
+      "message": "feat(router): add QUERY method shortcut for RFC 10008 (#4830)",
+      "files": [
+        {
+          "file": "routergroup.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 48,
+          "edges_before": 54,
+          "anchors_before": 0,
+          "nodes_after": 49,
+          "edges_after": 55,
+          "anchors_after": 0,
+          "added_nodes": 1,
+          "removed_nodes": 0,
+          "added_edges": 1,
+          "removed_edges": 0,
+          "modified_funcs": 0,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增節點] `RouterGroup.QUERY` (FUNCTION_DEF)\n  • + [新增呼叫邊] `RouterGroup.QUERY` ──[CALLS]──> `RouterGroup.handle`\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "_無任何現存函式發生實作變更_"
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "hash": "d9307dbcbbe796a64d9e0ef23452da888dd7f904",
+      "message": "fix(context): skip chmod on pre-existing dirs in SaveUploadedFile (#4702)",
+      "files": [
+        {
+          "file": "context.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 243,
+          "edges_before": 258,
+          "anchors_before": 0,
+          "nodes_after": 244,
+          "edges_after": 260,
+          "anchors_after": 0,
+          "added_nodes": 1,
+          "removed_nodes": 0,
+          "added_edges": 2,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增節點] `os.Stat (External/Pkg)` (FUNCTION_DEF)\n  • + [新增呼叫邊] `Context.SaveUploadedFile` ──[CALLS]──> `os.Stat (External/Pkg)`\n  • + [新增呼叫邊] `Context.SaveUploadedFile` ──[CALLS]──> `errors.Is (External/Pkg)`\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `Context.SaveUploadedFile()`\n- **變更前簽章 (Before)**: `func Context.SaveUploadedFile(file *multipart.FileHeader, dst string, perm ...fs.FileMode)` (L729~L756)\n- **變更後簽章 (After)**: `func Context.SaveUploadedFile(file *multipart.FileHeader, dst string, perm ...fs.FileMode)` (L734~L769)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string, perm ...fs.FileMode) error {\n\tsrc, err := file.Open()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer src.Close()\n\n\tvar mode os.FileMode = 0o750\n\tif len(perm) > 0 {\n\t\tmode = perm[0]\n\t}\n\tdir := filepath.Dir(dst)\n\tif err = os.MkdirAll(dir, mode); err != nil {\n\t\treturn err\n\t}\n\tif err = os.Chmod(dir, mode); err != nil {\n\t\treturn err\n\t}\n\n\tout, err := os.Create(dst)\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer out.Close()\n\n\t_, err = io.Copy(out, src)\n\treturn err\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string, perm ...fs.FileMode) error {\n\tsrc, err := file.Open()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer src.Close()\n\n\tvar mode os.FileMode = 0o750\n\tif len(perm) > 0 {\n\t\tmode = perm[0]\n\t}\n\tdir := filepath.Dir(dst)\n\t// Record whether the destination directory exists before MkdirAll, so we\n\t// only chmod a directory we just created. Chmod'ing a pre-existing directory\n\t// the process does not own (e.g. /tmp) fails with \"operation not permitted\"\n\t// (#4622). A non-ErrNotExist stat error also skips chmod and lets MkdirAll\n\t// surface the underlying failure.\n\t_, statErr := os.Stat(dir)\n\tif err = os.MkdirAll(dir, mode); err != nil {\n\t\treturn err\n\t}\n\tif errors.Is(statErr, os.ErrNotExist) {\n\t\tif err = os.Chmod(dir, mode); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\n\tout, err := os.Create(dst)\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer out.Close()\n\n\t_, err = io.Copy(out, src)\n\treturn err\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "hash": "4a3eb31fb15b2a2d78b4bdbe0c31a2c564b1977a",
+      "message": "fix(recovery): record recovered panics in c.Errors (#4698)",
+      "files": [
+        {
+          "file": "recovery.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 47,
+          "edges_before": 43,
+          "anchors_before": 0,
+          "nodes_after": 48,
+          "edges_after": 45,
+          "anchors_after": 0,
+          "added_nodes": 1,
+          "removed_nodes": 0,
+          "added_edges": 2,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增節點] `fmt.Errorf (External/Pkg)` (FUNCTION_DEF)\n  • + [新增呼叫邊] `defaultHandleRecovery` ──[CALLS]──> `fmt.Errorf (External/Pkg)`\n  • + [新增呼叫邊] `defaultHandleRecovery` ──[CALLS]──> `c.Error (External/Pkg)`\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `defaultHandleRecovery()`\n- **變更前簽章 (Before)**: `func defaultHandleRecovery(c *Context, _ any)` (L109~L111)\n- **變更後簽章 (After)**: `func defaultHandleRecovery(c *Context, err any)` (L109~L116)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc defaultHandleRecovery(c *Context, _ any) {\n\tc.AbortWithStatus(http.StatusInternalServerError)\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc defaultHandleRecovery(c *Context, err any) {\n\te, ok := err.(error)\n\tif !ok {\n\t\te = fmt.Errorf(\"%v\", err)\n\t}\n\tc.Error(e) //nolint: errcheck\n\tc.AbortWithStatus(http.StatusInternalServerError)\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "hash": "293ad7edebb3ae30369288bd6416ca0d78474727",
+      "message": "fix(context): Copy() copies Errors and Accepted fields (#4695)",
+      "files": [
+        {
+          "file": "context.go",
+          "change_type": "BODY_LEVEL_SEMANTIC_DELTA",
+          "nodes_before": 243,
+          "edges_before": 258,
+          "anchors_before": 0,
+          "nodes_after": 243,
+          "edges_after": 258,
+          "anchors_after": 0,
+          "added_nodes": 0,
+          "removed_nodes": 0,
+          "added_edges": 0,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `Context.Copy()`\n- **變更前簽章 (Before)**: `func Context.Copy()` (L122~L145)\n- **變更後簽章 (After)**: `func Context.Copy()` (L122~L155)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (c *Context) Copy() *Context {\n\tcp := Context{\n\t\twritermem: c.writermem,\n\t\tRequest:   c.Request,\n\t\tengine:    c.engine,\n\t}\n\n\tcp.writermem.ResponseWriter = nil\n\tcp.Writer = &cp.writermem\n\tcp.index = abortIndex\n\tcp.handlers = nil\n\tcp.fullPath = c.fullPath\n\n\tcKeys := c.Keys\n\tc.mu.RLock()\n\tcp.Keys = maps.Clone(cKeys)\n\tc.mu.RUnlock()\n\n\tcParams := c.Params\n\tcp.Params = make([]Param, len(cParams))\n\tcopy(cp.Params, cParams)\n\n\treturn &cp\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (c *Context) Copy() *Context {\n\tcp := Context{\n\t\twritermem: c.writermem,\n\t\tRequest:   c.Request,\n\t\tengine:    c.engine,\n\t}\n\n\tcp.writermem.ResponseWriter = nil\n\tcp.Writer = &cp.writermem\n\tcp.index = abortIndex\n\tcp.handlers = nil\n\tcp.fullPath = c.fullPath\n\n\tcKeys := c.Keys\n\tc.mu.RLock()\n\tcp.Keys = maps.Clone(cKeys)\n\tc.mu.RUnlock()\n\n\tcParams := c.Params\n\tcp.Params = make([]Param, len(cParams))\n\tcopy(cp.Params, cParams)\n\n\tif c.Errors != nil {\n\t\tcp.Errors = make(errorMsgs, len(c.Errors))\n\t\tcopy(cp.Errors, c.Errors)\n\t}\n\n\tif c.Accepted != nil {\n\t\tcp.Accepted = make([]string, len(c.Accepted))\n\t\tcopy(cp.Accepted, c.Accepted)\n\t}\n\n\treturn &cp\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "hash": "d75fcd4c9ab260e5225de590f1f0f8c0e0e12d11",
+      "message": "fix(response): panic on Hijack/CloseNotify when wrapper unsupported (#4645)",
+      "files": [
+        {
+          "file": "response_writer.go",
+          "change_type": "BODY_LEVEL_SEMANTIC_DELTA",
+          "nodes_before": 16,
+          "edges_before": 12,
+          "anchors_before": 0,
+          "nodes_after": 16,
+          "edges_after": 12,
+          "anchors_after": 0,
+          "added_nodes": 0,
+          "removed_nodes": 0,
+          "added_edges": 0,
+          "removed_edges": 0,
+          "modified_funcs": 2,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `responseWriter.Hijack()`\n- **變更前簽章 (Before)**: `func responseWriter.Hijack()` (L111~L121)\n- **變更後簽章 (After)**: `func responseWriter.Hijack()` (L111~L125)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {\n\t// Allow hijacking before any data is written (size == -1) or after headers are written (size == 0),\n\t// but not after body data is written (size > 0). For compatibility with websocket libraries (e.g., github.com/coder/websocket)\n\tif w.size > 0 {\n\t\treturn nil, nil, errHijackAlreadyWritten\n\t}\n\tif w.size < 0 {\n\t\tw.size = 0\n\t}\n\treturn w.ResponseWriter.(http.Hijacker).Hijack()\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {\n\t// Allow hijacking before any data is written (size == -1) or after headers are written (size == 0),\n\t// but not after body data is written (size > 0). For compatibility with websocket libraries (e.g., github.com/coder/websocket)\n\tif w.size > 0 {\n\t\treturn nil, nil, errHijackAlreadyWritten\n\t}\n\thijacker, ok := w.ResponseWriter.(http.Hijacker)\n\tif !ok {\n\t\treturn nil, nil, http.ErrNotSupported\n\t}\n\tif w.size < 0 {\n\t\tw.size = 0\n\t}\n\treturn hijacker.Hijack()\n}\n```\n\n### 🔹 函式: `responseWriter.CloseNotify()`\n- **變更前簽章 (Before)**: `func responseWriter.CloseNotify()` (L124~L126)\n- **變更後簽章 (After)**: `func responseWriter.CloseNotify()` (L128~L133)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (w *responseWriter) CloseNotify() <-chan bool {\n\treturn w.ResponseWriter.(http.CloseNotifier).CloseNotify()\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (w *responseWriter) CloseNotify() <-chan bool {\n\tif cn, ok := w.ResponseWriter.(http.CloseNotifier); ok {\n\t\treturn cn.CloseNotify()\n\t}\n\treturn nil\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 13,
+      "hash": "96ece6a14123923d00081320486042f568adef32",
+      "message": "feat(context): add Scheme() with proper reverse proxy support (#4655)",
+      "files": [
+        {
+          "file": "context.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 242,
+          "edges_before": 257,
+          "anchors_before": 0,
+          "nodes_after": 243,
+          "edges_after": 258,
+          "anchors_after": 0,
+          "added_nodes": 1,
+          "removed_nodes": 0,
+          "added_edges": 1,
+          "removed_edges": 0,
+          "modified_funcs": 0,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增節點] `Context.Scheme` (FUNCTION_DEF)\n  • + [新增呼叫邊] `Context.Scheme` ──[CALLS]──> `Context.requestHeader`\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "_無任何現存函式發生實作變更_"
+        }
+      ]
+    },
+    {
+      "index": 14,
+      "hash": "c79f5d466ee780c329663d5b599d40639b33cd93",
+      "message": "refactor: optimize error message concatenation in default_validator (#4685)",
+      "files": [
+        {
+          "file": "binding/default_validator.go",
+          "change_type": "BODY_LEVEL_SEMANTIC_DELTA",
+          "nodes_before": 26,
+          "edges_before": 25,
+          "anchors_before": 0,
+          "nodes_after": 26,
+          "edges_after": 25,
+          "anchors_after": 0,
+          "added_nodes": 0,
+          "removed_nodes": 0,
+          "added_edges": 0,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `SliceValidationError.Error()`\n- **變更前簽章 (Before)**: `func SliceValidationError.Error()` (L24~L39)\n- **變更後簽章 (After)**: `func SliceValidationError.Error()` (L24~L42)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (err SliceValidationError) Error() string {\n\tif len(err) == 0 {\n\t\treturn \"\"\n\t}\n\n\tvar b strings.Builder\n\tfor i := range len(err) {\n\t\tif err[i] != nil {\n\t\t\tif b.Len() > 0 {\n\t\t\t\tb.WriteString(\"\\n\")\n\t\t\t}\n\t\t\tb.WriteString(\"[\" + strconv.Itoa(i) + \"]: \" + err[i].Error())\n\t\t}\n\t}\n\treturn b.String()\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (err SliceValidationError) Error() string {\n\tif len(err) == 0 {\n\t\treturn \"\"\n\t}\n\n\tvar b strings.Builder\n\tfor i := range len(err) {\n\t\tif err[i] != nil {\n\t\t\tif b.Len() > 0 {\n\t\t\t\tb.WriteString(\"\\n\")\n\t\t\t}\n\t\t\tb.WriteString(\"[\")\n\t\t\tb.WriteString(strconv.Itoa(i))\n\t\t\tb.WriteString(\"]: \")\n\t\t\tb.WriteString(err[i].Error())\n\t\t}\n\t}\n\treturn b.String()\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 15,
+      "hash": "472d086af2acd924cb4b9d7be0525f7d790f69bc",
+      "message": "fix(tree): panic in findCaseInsensitivePathRec with RedirectFixedPath (#4535)",
+      "files": [
+        {
+          "file": "tree.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 50,
+          "edges_before": 53,
+          "anchors_before": 0,
+          "nodes_after": 52,
+          "edges_after": 53,
+          "anchors_after": 0,
+          "added_nodes": 2,
+          "removed_nodes": 0,
+          "added_edges": 0,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增節點] `off` (MODULE_STATE)\n  • + [新增節點] `rv` (MODULE_STATE)\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `node.findCaseInsensitivePathRec()`\n- **變更前簽章 (Before)**: `func node.findCaseInsensitivePathRec(path string, ciPath []byte, rb [4]byte, fixTrailingSlash bool)` (L703~L885)\n- **變更後簽章 (After)**: `func node.findCaseInsensitivePathRec(path string, ciPath []byte, rb [4]byte, fixTrailingSlash bool)` (L703~L950)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (n *node) findCaseInsensitivePathRec(path string, ciPath []byte, rb [4]byte, fixTrailingSlash bool) []byte {\n\tnpLen := len(n.path)\n\nwalk: // Outer loop for walking the tree\n\tfor len(path) >= npLen && (npLen == 0 || strings.EqualFold(path[1:npLen], n.path[1:])) {\n\t\t// Add common prefix to result\n\t\toldPath := path\n\t\tpath = path[npLen:]\n\t\tciPath = append(ciPath, n.path...)\n\n\t\tif len(path) == 0 {\n\t\t\t// We should have reached the node containing the handle.\n\t\t\t// Check if this node has a handle registered.\n\t\t\tif n.handlers != nil {\n\t\t\t\treturn ciPath\n\t\t\t}\n\n\t\t\t// No handle found.\n\t\t\t// Try to fix the path by adding a trailing slash\n\t\t\tif fixTrailingSlash {\n\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\tif c == '/' {\n\t\t\t\t\t\tn = n.children[i]\n\t\t\t\t\t\tif (len(n.path) == 1 && n.handlers != nil) ||\n\t\t\t\t\t\t\t(n.nType == catchAll && n.children[0].handlers != nil) {\n\t\t\t\t\t\t\treturn append(ciPath, '/')\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn nil\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t\treturn nil\n\t\t}\n\n\t\t// If this node does not have a wildcard (param or catchAll) child,\n\t\t// we can just look up the next child node and continue to walk down\n\t\t// the tree\n\t\tif !n.wildChild {\n\t\t\t// Skip rune bytes already processed\n\t\t\trb = shiftNRuneBytes(rb, npLen)\n\n\t\t\tif rb[0] != 0 {\n\t\t\t\t// Old rune not finished\n\t\t\t\tidxc := rb[0]\n\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\t// continue with child node\n\t\t\t\t\t\tn = n.children[i]\n\t\t\t\t\t\tnpLen = len(n.path)\n\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t} else {\n\t\t\t\t// Process a new rune\n\t\t\t\tvar rv rune\n\n\t\t\t\t// Find rune start.\n\t\t\t\t// Runes are up to 4 byte long,\n\t\t\t\t// -4 would definitely be another rune.\n\t\t\t\tvar off int\n\t\t\t\tfor max_ := min(npLen, 3); off < max_; off++ {\n\t\t\t\t\tif i := npLen - off; utf8.RuneStart(oldPath[i]) {\n\t\t\t\t\t\t// read rune from cached path\n\t\t\t\t\t\trv, _ = utf8.DecodeRuneInString(oldPath[i:])\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\t// Calculate lowercase bytes of current rune\n\t\t\t\tlo := unicode.ToLower(rv)\n\t\t\t\tutf8.EncodeRune(rb[:], lo)\n\n\t\t\t\t// Skip already processed bytes\n\t\t\t\trb = shiftNRuneBytes(rb, off)\n\n\t\t\t\tidxc := rb[0]\n\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\t// Lowercase matches\n\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\t// must use a recursive approach since both the\n\t\t\t\t\t\t// uppercase byte and the lowercase byte might exist\n\t\t\t\t\t\t// as an index\n\t\t\t\t\t\tif out := n.children[i].findCaseInsensitivePathRec(\n\t\t\t\t\t\t\tpath, ciPath, rb, fixTrailingSlash,\n\t\t\t\t\t\t); out != nil {\n\t\t\t\t\t\t\treturn out\n\t\t\t\t\t\t}\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\t// If we found no match, the same for the uppercase rune,\n\t\t\t\t// if it differs\n\t\t\t\tif up := unicode.ToUpper(rv); up != lo {\n\t\t\t\t\tutf8.EncodeRune(rb[:], up)\n\t\t\t\t\trb = shiftNRuneBytes(rb, off)\n\n\t\t\t\t\tidxc := rb[0]\n\t\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\t\t// Uppercase matches\n\t\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\t\t// Continue with child node\n\t\t\t\t\t\t\tn = n.children[i]\n\t\t\t\t\t\t\tnpLen = len(n.path)\n\t\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\n\t\t\t// Nothing found. We can recommend to redirect to the same URL\n\t\t\t// without a trailing slash if a leaf exists for that path\n\t\t\tif fixTrailingSlash && path == \"/\" && n.handlers != nil {\n\t\t\t\treturn ciPath\n\t\t\t}\n\t\t\treturn nil\n\t\t}\n\n\t\tn = n.children[0]\n\t\tswitch n.nType {\n\t\tcase param:\n\t\t\t// Find param end (either '/' or path end)\n\t\t\tend := 0\n\t\t\tfor end < len(path) && path[end] != '/' {\n\t\t\t\tend++\n\t\t\t}\n\n\t\t\t// Add param value to case insensitive path\n\t\t\tciPath = append(ciPath, path[:end]...)\n\n\t\t\t// We need to go deeper!\n\t\t\tif end < len(path) {\n\t\t\t\tif len(n.children) > 0 {\n\t\t\t\t\t// Continue with child node\n\t\t\t\t\tn = n.children[0]\n\t\t\t\t\tnpLen = len(n.path)\n\t\t\t\t\tpath = path[end:]\n\t\t\t\t\tcontinue\n\t\t\t\t}\n\n\t\t\t\t// ... but we can't\n\t\t\t\tif fixTrailingSlash && len(path) == end+1 {\n\t\t\t\t\treturn ciPath\n\t\t\t\t}\n\t\t\t\treturn nil\n\t\t\t}\n\n\t\t\tif n.handlers != nil {\n\t\t\t\treturn ciPath\n\t\t\t}\n\n\t\t\tif fixTrailingSlash && len(n.children) == 1 {\n\t\t\t\t// No handle found. Check if a handle for this path + a\n\t\t\t\t// trailing slash exists\n\t\t\t\tn = n.children[0]\n\t\t\t\tif n.path == \"/\" && n.handlers != nil {\n\t\t\t\t\treturn append(ciPath, '/')\n\t\t\t\t}\n\t\t\t}\n\n\t\t\treturn nil\n\n\t\tcase catchAll:\n\t\t\treturn append(ciPath, path...)\n\n\t\tdefault:\n\t\t\tpanic(\"invalid node type\")\n\t\t}\n\t}\n\n\t// Nothing found.\n\t// Try to fix the path by adding / removing a trailing slash\n\tif fixTrailingSlash {\n\t\tif path == \"/\" {\n\t\t\treturn ciPath\n\t\t}\n\t\tif len(path)+1 == npLen && n.path[len(path)] == '/' &&\n\t\t\tstrings.EqualFold(path[1:], n.path[1:len(path)]) && n.handlers != nil {\n\t\t\treturn append(ciPath, n.path...)\n\t\t}\n\t}\n\treturn nil\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (n *node) findCaseInsensitivePathRec(path string, ciPath []byte, rb [4]byte, fixTrailingSlash bool) []byte {\n\tnpLen := len(n.path)\n\nwalk: // Outer loop for walking the tree\n\tfor len(path) >= npLen && (npLen == 0 || strings.EqualFold(path[1:npLen], n.path[1:])) {\n\t\t// Add common prefix to result\n\t\toldPath := path\n\t\tpath = path[npLen:]\n\t\tciPath = append(ciPath, n.path...)\n\n\t\tif len(path) == 0 {\n\t\t\t// We should have reached the node containing the handle.\n\t\t\t// Check if this node has a handle registered.\n\t\t\tif n.handlers != nil {\n\t\t\t\treturn ciPath\n\t\t\t}\n\n\t\t\t// No handle found.\n\t\t\t// Try to fix the path by adding a trailing slash\n\t\t\tif fixTrailingSlash {\n\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\tif c == '/' {\n\t\t\t\t\t\tn = n.children[i]\n\t\t\t\t\t\tif (len(n.path) == 1 && n.handlers != nil) ||\n\t\t\t\t\t\t\t(n.nType == catchAll && n.children[0].handlers != nil) {\n\t\t\t\t\t\t\treturn append(ciPath, '/')\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn nil\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t\treturn nil\n\t\t}\n\n\t\t// If this node does not have a wildcard (param or catchAll) child,\n\t\t// we can just look up the next child node and continue to walk down\n\t\t// the tree\n\t\tif !n.wildChild {\n\t\t\t// Skip rune bytes already processed\n\t\t\trb = shiftNRuneBytes(rb, npLen)\n\n\t\t\tif rb[0] != 0 {\n\t\t\t\t// Old rune not finished\n\t\t\t\tidxc := rb[0]\n\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\t// continue with child node\n\t\t\t\t\t\tn = n.children[i]\n\t\t\t\t\t\tnpLen = len(n.path)\n\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t} else {\n\t\t\t\t// Process a new rune\n\t\t\t\tvar rv rune\n\n\t\t\t\t// Find rune start.\n\t\t\t\t// Runes are up to 4 byte long,\n\t\t\t\t// -4 would definitely be another rune.\n\t\t\t\tvar off int\n\t\t\t\tfor max_ := min(npLen, 3); off < max_; off++ {\n\t\t\t\t\tif i := npLen - off; utf8.RuneStart(oldPath[i]) {\n\t\t\t\t\t\t// read rune from cached path\n\t\t\t\t\t\trv, _ = utf8.DecodeRuneInString(oldPath[i:])\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\t// Calculate lowercase bytes of current rune\n\t\t\t\tlo := unicode.ToLower(rv)\n\t\t\t\tutf8.EncodeRune(rb[:], lo)\n\n\t\t\t\t// Skip already processed bytes\n\t\t\t\trb = shiftNRuneBytes(rb, off)\n\n\t\t\t\tidxc := rb[0]\n\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\t// Lowercase matches\n\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\t// must use a recursive approach since both the\n\t\t\t\t\t\t// uppercase byte and the lowercase byte might exist\n\t\t\t\t\t\t// as an index\n\t\t\t\t\t\tif out := n.children[i].findCaseInsensitivePathRec(\n\t\t\t\t\t\t\tpath, ciPath, rb, fixTrailingSlash,\n\t\t\t\t\t\t); out != nil {\n\t\t\t\t\t\t\treturn out\n\t\t\t\t\t\t}\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\t// If we found no match, the same for the uppercase rune,\n\t\t\t\t// if it differs\n\t\t\t\tif up := unicode.ToUpper(rv); up != lo {\n\t\t\t\t\tutf8.EncodeRune(rb[:], up)\n\t\t\t\t\trb = shiftNRuneBytes(rb, off)\n\n\t\t\t\t\tidxc := rb[0]\n\t\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\t\t// Uppercase matches\n\t\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\t\t// Continue with child node\n\t\t\t\t\t\t\tn = n.children[i]\n\t\t\t\t\t\t\tnpLen = len(n.path)\n\t\t\t\t\t\t\tcontinue walk\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\n\t\t\t// Nothing found. We can recommend to redirect to the same URL\n\t\t\t// without a trailing slash if a leaf exists for that path\n\t\t\tif fixTrailingSlash && path == \"/\" && n.handlers != nil {\n\t\t\t\treturn ciPath\n\t\t\t}\n\t\t\treturn nil\n\t\t}\n\n\t\t// When wildChild is true, try static children first (via indices)\n\t\t// before falling back to the wildcard child. This ensures that\n\t\t// case-insensitive lookups prefer static routes over param routes\n\t\t// (e.g., /PREFIX/XXX should resolve to /prefix/xxx, not match :id).\n\t\tif len(n.indices) > 0 {\n\t\t\trb = shiftNRuneBytes(rb, npLen)\n\n\t\t\tif rb[0] != 0 {\n\t\t\t\tidxc := rb[0]\n\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\tif out := n.children[i].findCaseInsensitivePathRec(\n\t\t\t\t\t\t\tpath, ciPath, rb, fixTrailingSlash,\n\t\t\t\t\t\t); out != nil {\n\t\t\t\t\t\t\treturn out\n\t\t\t\t\t\t}\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t} else {\n\t\t\t\tvar rv rune\n\t\t\t\tvar off int\n\t\t\t\tfor max_ := min(npLen, 3); off < max_; off++ {\n\t\t\t\t\tif i := npLen - off; utf8.RuneStart(oldPath[i]) {\n\t\t\t\t\t\trv, _ = utf8.DecodeRuneInString(oldPath[i:])\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\tlo := unicode.ToLower(rv)\n\t\t\t\tutf8.EncodeRune(rb[:], lo)\n\t\t\t\trb = shiftNRuneBytes(rb, off)\n\n\t\t\t\tidxc := rb[0]\n\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\tif out := n.children[i].findCaseInsensitivePathRec(\n\t\t\t\t\t\t\tpath, ciPath, rb, fixTrailingSlash,\n\t\t\t\t\t\t); out != nil {\n\t\t\t\t\t\t\treturn out\n\t\t\t\t\t\t}\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t}\n\n\t\t\t\tif up := unicode.ToUpper(rv); up != lo {\n\t\t\t\t\tutf8.EncodeRune(rb[:], up)\n\t\t\t\t\trb = shiftNRuneBytes(rb, off)\n\n\t\t\t\t\tidxc := rb[0]\n\t\t\t\t\tfor i, c := range []byte(n.indices) {\n\t\t\t\t\t\tif c == idxc {\n\t\t\t\t\t\t\tif out := n.children[i].findCaseInsensitivePathRec(\n\t\t\t\t\t\t\t\tpath, ciPath, rb, fixTrailingSlash,\n\t\t\t\t\t\t\t); out != nil {\n\t\t\t\t\t\t\t\treturn out\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tbreak\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\n\t\t// Fall back to wildcard child, which is always at the end of the array\n\t\tn = n.children[len(n.children)-1]\n\t\tswitch n.nType {\n\t\tcase param:\n\t\t\t// Find param end (either '/' or path end)\n\t\t\tend := 0\n\t\t\tfor end < len(path) && path[end] != '/' {\n\t\t\t\tend++\n\t\t\t}\n\n\t\t\t// Add param value to case insensitive path\n\t\t\tciPath = append(ciPath, path[:end]...)\n\n\t\t\t// We need to go deeper!\n\t\t\tif end < len(path) {\n\t\t\t\tif len(n.children) > 0 {\n\t\t\t\t\t// Continue with child node\n\t\t\t\t\tn = n.children[0]\n\t\t\t\t\tnpLen = len(n.path)\n\t\t\t\t\tpath = path[end:]\n\t\t\t\t\tcontinue\n\t\t\t\t}\n\n\t\t\t\t// ... but we can't\n\t\t\t\tif fixTrailingSlash && len(path) == end+1 {\n\t\t\t\t\treturn ciPath\n\t\t\t\t}\n\t\t\t\treturn nil\n\t\t\t}\n\n\t\t\tif n.handlers != nil {\n\t\t\t\treturn ciPath\n\t\t\t}\n\n\t\t\tif fixTrailingSlash && len(n.children) == 1 {\n\t\t\t\t// No handle found. Check if a handle for this path + a\n\t\t\t\t// trailing slash exists\n\t\t\t\tn = n.children[0]\n\t\t\t\tif n.path == \"/\" && n.handlers != nil {\n\t\t\t\t\treturn append(ciPath, '/')\n\t\t\t\t}\n\t\t\t}\n\n\t\t\treturn nil\n\n\t\tcase catchAll:\n\t\t\treturn append(ciPath, path...)\n\n\t\tdefault:\n\t\t\tpanic(\"invalid node type\")\n\t\t}\n\t}\n\n\t// Nothing found.\n\t// Try to fix the path by adding / removing a trailing slash\n\tif fixTrailingSlash {\n\t\tif path == \"/\" {\n\t\t\treturn ciPath\n\t\t}\n\t\tif len(path)+1 == npLen && n.path[len(path)] == '/' &&\n\t\t\tstrings.EqualFold(path[1:], n.path[1:len(path)]) && n.handlers != nil {\n\t\t\treturn append(ciPath, n.path...)\n\t\t}\n\t}\n\treturn nil\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 16,
+      "hash": "fb2583442c4d9bccb75e6d26f1aa6e7c01950db6",
+      "message": "test(context): use http.StatusContinue constant instead of magic number 100 (#4542)",
+      "files": [
+        {
+          "file": "context.go",
+          "change_type": "ZERO_DELTA",
+          "nodes_before": 241,
+          "edges_before": 256,
+          "anchors_before": 0,
+          "nodes_after": 241,
+          "edges_after": 256,
+          "anchors_after": 0,
+          "added_nodes": 0,
+          "removed_nodes": 0,
+          "added_edges": 0,
+          "removed_edges": 0,
+          "modified_funcs": 0,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "_無任何現存函式發生實作變更_"
+        }
+      ]
+    },
+    {
+      "index": 17,
+      "hash": "5c00df8afadd06cc5be530dde00fe6d9fa4a2e4a",
+      "message": "fix(render): write content length in Data.Render (#4206)",
+      "files": [
+        {
+          "file": "render/data.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 4,
+          "edges_before": 3,
+          "anchors_before": 0,
+          "nodes_after": 8,
+          "edges_after": 7,
+          "anchors_after": 0,
+          "added_nodes": 4,
+          "removed_nodes": 0,
+          "added_edges": 4,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增節點] `len (External/Pkg)` (FUNCTION_DEF)\n  • + [新增節點] `w.Header().Set (External/Pkg)` (FUNCTION_DEF)\n  • + [新增節點] `w.Header (External/Pkg)` (FUNCTION_DEF)\n  • + [新增節點] `strconv.Itoa (External/Pkg)` (FUNCTION_DEF)\n  • + [新增呼叫邊] `Data.Render` ──[CALLS]──> `len (External/Pkg)`\n  • + [新增呼叫邊] `Data.Render` ──[CALLS]──> `w.Header().Set (External/Pkg)`\n  • + [新增呼叫邊] `Data.Render` ──[CALLS]──> `w.Header (External/Pkg)`\n  • + [新增呼叫邊] `Data.Render` ──[CALLS]──> `strconv.Itoa (External/Pkg)`\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `Data.Render()`\n- **變更前簽章 (Before)**: `func Data.Render(w http.ResponseWriter)` (L16~L20)\n- **變更後簽章 (After)**: `func Data.Render(w http.ResponseWriter)` (L19~L26)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (r Data) Render(w http.ResponseWriter) (err error) {\n\tr.WriteContentType(w)\n\t_, err = w.Write(r.Data)\n\treturn\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (r Data) Render(w http.ResponseWriter) (err error) {\n\tr.WriteContentType(w)\n\tif len(r.Data) > 0 {\n\t\tw.Header().Set(\"Content-Length\", strconv.Itoa(len(r.Data)))\n\t}\n\t_, err = w.Write(r.Data)\n\treturn\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 18,
+      "hash": "db309081bc5c137b2aa15701ef53f7f19788da25",
+      "message": "chore(logger): allow skipping query string output (#4547)",
+      "files": [
+        {
+          "file": "logger.go",
+          "change_type": "BODY_LEVEL_SEMANTIC_DELTA",
+          "nodes_before": 35,
+          "edges_before": 25,
+          "anchors_before": 0,
+          "nodes_after": 35,
+          "edges_after": 25,
+          "anchors_after": 0,
+          "added_nodes": 0,
+          "removed_nodes": 0,
+          "added_edges": 0,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `LoggerWithConfig()`\n- **變更前簽章 (Before)**: `func LoggerWithConfig(conf LoggerConfig)` (L240~L309)\n- **變更後簽章 (After)**: `func LoggerWithConfig(conf LoggerConfig)` (L245~L314)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc LoggerWithConfig(conf LoggerConfig) HandlerFunc {\n\tformatter := conf.Formatter\n\tif formatter == nil {\n\t\tformatter = defaultLogFormatter\n\t}\n\n\tout := conf.Output\n\tif out == nil {\n\t\tout = DefaultWriter\n\t}\n\n\tnotlogged := conf.SkipPaths\n\n\tisTerm := true\n\n\tif w, ok := out.(*os.File); !ok || os.Getenv(\"TERM\") == \"dumb\" ||\n\t\t(!isatty.IsTerminal(w.Fd()) && !isatty.IsCygwinTerminal(w.Fd())) {\n\t\tisTerm = false\n\t}\n\n\tvar skip map[string]struct{}\n\n\tif length := len(notlogged); length > 0 {\n\t\tskip = make(map[string]struct{}, length)\n\n\t\tfor _, path := range notlogged {\n\t\t\tskip[path] = struct{}{}\n\t\t}\n\t}\n\n\treturn func(c *Context) {\n\t\t// Start timer\n\t\tstart := time.Now()\n\t\tpath := c.Request.URL.Path\n\t\traw := c.Request.URL.RawQuery\n\n\t\t// Process request\n\t\tc.Next()\n\n\t\t// Log only when it is not being skipped\n\t\tif _, ok := skip[path]; ok || (conf.Skip != nil && conf.Skip(c)) {\n\t\t\treturn\n\t\t}\n\n\t\tparam := LogFormatterParams{\n\t\t\tRequest: c.Request,\n\t\t\tisTerm:  isTerm,\n\t\t\tKeys:    c.Keys,\n\t\t}\n\n\t\t// Stop timer\n\t\tparam.TimeStamp = time.Now()\n\t\tparam.Latency = param.TimeStamp.Sub(start)\n\n\t\tparam.ClientIP = c.ClientIP()\n\t\tparam.Method = c.Request.Method\n\t\tparam.StatusCode = c.Writer.Status()\n\t\tparam.ErrorMessage = c.Errors.ByType(ErrorTypePrivate).String()\n\n\t\tparam.BodySize = c.Writer.Size()\n\n\t\tif raw != \"\" {\n\t\t\tpath = path + \"?\" + raw\n\t\t}\n\n\t\tparam.Path = path\n\n\t\tfmt.Fprint(out, formatter(param))\n\t}\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc LoggerWithConfig(conf LoggerConfig) HandlerFunc {\n\tformatter := conf.Formatter\n\tif formatter == nil {\n\t\tformatter = defaultLogFormatter\n\t}\n\n\tout := conf.Output\n\tif out == nil {\n\t\tout = DefaultWriter\n\t}\n\n\tnotlogged := conf.SkipPaths\n\n\tisTerm := true\n\n\tif w, ok := out.(*os.File); !ok || os.Getenv(\"TERM\") == \"dumb\" ||\n\t\t(!isatty.IsTerminal(w.Fd()) && !isatty.IsCygwinTerminal(w.Fd())) {\n\t\tisTerm = false\n\t}\n\n\tvar skip map[string]struct{}\n\n\tif length := len(notlogged); length > 0 {\n\t\tskip = make(map[string]struct{}, length)\n\n\t\tfor _, path := range notlogged {\n\t\t\tskip[path] = struct{}{}\n\t\t}\n\t}\n\n\treturn func(c *Context) {\n\t\t// Start timer\n\t\tstart := time.Now()\n\t\tpath := c.Request.URL.Path\n\t\traw := c.Request.URL.RawQuery\n\n\t\t// Process request\n\t\tc.Next()\n\n\t\t// Log only when it is not being skipped\n\t\tif _, ok := skip[path]; ok || (conf.Skip != nil && conf.Skip(c)) {\n\t\t\treturn\n\t\t}\n\n\t\tparam := LogFormatterParams{\n\t\t\tRequest: c.Request,\n\t\t\tisTerm:  isTerm,\n\t\t\tKeys:    c.Keys,\n\t\t}\n\n\t\t// Stop timer\n\t\tparam.TimeStamp = time.Now()\n\t\tparam.Latency = param.TimeStamp.Sub(start)\n\n\t\tparam.ClientIP = c.ClientIP()\n\t\tparam.Method = c.Request.Method\n\t\tparam.StatusCode = c.Writer.Status()\n\t\tparam.ErrorMessage = c.Errors.ByType(ErrorTypePrivate).String()\n\n\t\tparam.BodySize = c.Writer.Size()\n\n\t\tif raw != \"\" && !conf.SkipQueryString {\n\t\t\tpath = path + \"?\" + raw\n\t\t}\n\n\t\tparam.Path = path\n\n\t\tfmt.Fprint(out, formatter(param))\n\t}\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 19,
+      "hash": "cad29c5e3f50a9764edbfc4787825c6caabd8579",
+      "message": "perf(tree): reduce allocations in findCaseInsensitivePath (#4417)",
+      "files": [
+        {
+          "file": "tree.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 49,
+          "edges_before": 52,
+          "anchors_before": 0,
+          "nodes_after": 50,
+          "edges_after": 53,
+          "anchors_after": 0,
+          "added_nodes": 1,
+          "removed_nodes": 0,
+          "added_edges": 1,
+          "removed_edges": 0,
+          "modified_funcs": 1,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增節點] `max (External/Pkg)` (FUNCTION_DEF)\n  • + [新增呼叫邊] `node.findCaseInsensitivePath` ──[CALLS]──> `max (External/Pkg)`\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "## 🔍 函式實作語意變更對照包 (Function Implementation Semantic Diff)\n\n### 🔹 函式: `node.findCaseInsensitivePath()`\n- **變更前簽章 (Before)**: `func node.findCaseInsensitivePath(path string, fixTrailingSlash bool)` (L671~L689)\n- **變更後簽章 (After)**: `func node.findCaseInsensitivePath(path string, fixTrailingSlash bool)` (L671~L684)\n\n#### ◀️ 變更前實作碼 (Before Implementation):\n```\nfunc (n *node) findCaseInsensitivePath(path string, fixTrailingSlash bool) ([]byte, bool) {\n\tconst stackBufSize = 128\n\n\t// Use a static sized buffer on the stack in the common case.\n\t// If the path is too long, allocate a buffer on the heap instead.\n\tbuf := make([]byte, 0, stackBufSize)\n\tif length := len(path) + 1; length > stackBufSize {\n\t\tbuf = make([]byte, 0, length)\n\t}\n\n\tciPath := n.findCaseInsensitivePathRec(\n\t\tpath,\n\t\tbuf,       // Preallocate enough memory for new path\n\t\t[4]byte{}, // Empty rune buffer\n\t\tfixTrailingSlash,\n\t)\n\n\treturn ciPath, ciPath != nil\n}\n```\n\n#### ▶️ 變更後實作碼 (After Implementation):\n```\nfunc (n *node) findCaseInsensitivePath(path string, fixTrailingSlash bool) ([]byte, bool) {\n\tconst stackBufSize = 128\n\n\tbuf := make([]byte, 0, max(stackBufSize, len(path)+1))\n\n\tciPath := n.findCaseInsensitivePathRec(\n\t\tpath,\n\t\tbuf,       // Preallocate enough memory for new path\n\t\t[4]byte{}, // Empty rune buffer\n\t\tfixTrailingSlash,\n\t)\n\n\treturn ciPath, ciPath != nil\n}\n```\n"
+        }
+      ]
+    },
+    {
+      "index": 20,
+      "hash": "53410d2e07054369e0960fbe2eed97e1b9966f12",
+      "message": "feat(context): add GetError and GetErrorSlice methods for error retrieval (#4502)",
+      "files": [
+        {
+          "file": "context.go",
+          "change_type": "STRUCTURAL_GRAPH_DELTA",
+          "nodes_before": 237,
+          "edges_before": 252,
+          "anchors_before": 0,
+          "nodes_after": 240,
+          "edges_after": 254,
+          "anchors_after": 0,
+          "added_nodes": 3,
+          "removed_nodes": 0,
+          "added_edges": 2,
+          "removed_edges": 0,
+          "modified_funcs": 0,
+          "transitions": 0,
+          "verdict": "🟢 READY_TO_SHIP",
+          "passed": true,
+          "diff_markdown": "🌲 **UIA 語意控制樹變更差分 (Semantic UIA-Diff):**\n---\n  _無任何 UI 控制項變更_\n\n🛡️ **形式化守衛狀態遷移 (Invariant Transitions):**\n  • _無狀態躍遷變動_\n\n🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**\n  • + [新增節點] `getTyped[error] (External/Pkg)` (FUNCTION_DEF)\n  • + [新增節點] `Context.GetErrorSlice` (FUNCTION_DEF)\n  • + [新增節點] `Context.GetError` (FUNCTION_DEF)\n  • + [新增呼叫邊] `Context.GetError` ──[CALLS]──> `getTyped[error] (External/Pkg)`\n  • + [新增呼叫邊] `Context.GetErrorSlice` ──[CALLS]──> `getTyped`\n\nℹ️ **存量環境提醒**: 檔案內含 1 項既有技術債提醒 (非本次 Commit 引入，不予阻礙發布)\n\n**最終驗收裁決: 🟢 READY_TO_SHIP**",
+          "func_diff_markdown": "_無任何現存函式發生實作變更_"
+        }
+      ]
+    }
+  ]
+}

@@ -320,8 +320,8 @@ python.exe -X utf8 tools/audit_textual_20_flow_bugs.py
 5. [x] **加入 UI 錨點圖切片 (Graph Slicing)**：`forward_slice(anchor_id)` 可從 UI 控制項向下切出受影響的完整因果子圖。
 6. [x] **標準化 Node-Link 序列化**：支援 `to_node_link_data()`，為 MCP Tool 與 Agent 協議提供零成本格式互轉。
 7. [x] **v2 統一互動式雙欄 HTML 儀表板**：支援點擊節點平滑滾動並高亮對應原始碼行號。
-8. [ ] **實作 Spec-Driven 規格圖譜驗收介面**：`codemap.py --verify-spec <spec.json> --code <code>`，提供上位 Agent 對 Subagents 交付成果的確定性數學驗收。
-9. [ ] **自動化違規診斷與重派修復閉環 (Self-Correction Loop)**：驗收失敗時輸出結構化因果違規報告，上位 Agent 直接退回給責任 Subagent 精準修復。
-9.5. [ ] **Subagent 規格異議機制 (Spec Negotiation)**：支援結構化 Spec Objection 回報、上位 Agent 裁決、規格圖譜版本化與受影響 Subagents 廣播。
+8. [x] **實作 Spec-Driven 規格圖譜驗收介面**：`codemap.py --verify-spec <spec.json> --file <file>`，提供上位 Agent 對 Subagents 交付成果的確定性數學驗收。
+9. [x] **自動化違規診斷與重派修復閉環 (Self-Correction Loop)**：驗收失敗時輸出結構化因果違規報告，上位 Agent 直接退回給責任 Subagent 精準修復。
+9.5. [x] **Subagent 規格異議機制 (Spec Negotiation)**：支援結構化 Spec Objection 回報、AST 防偽查核 (`--verify-objection`)、上位 Agent 裁決、規格圖譜版本化與受影響 Subagents 廣播。
 10. [ ] **封裝為 Agent MCP Tool**：提供給 Claude / Gemini 等 Coding Agent 即時調用圖譜規劃與驗收能力。
 11. [ ] **擴充 Dart (Flutter UI) 與 Java/Kotlin 適配器**。

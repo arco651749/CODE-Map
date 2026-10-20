@@ -18,6 +18,7 @@ class UIACodeGraph:
         "UI_CONTROL",       # 按鈕、輸入框、選單項、快捷鍵
         "EVENT_BINDING",    # 事件綁定、信號槽、onClick
         "FUNCTION_DEF",     # 函式宣告、方法宣告
+        "MODULE_STATE",     # 模組頂層常數、設定表、正規表示式對應表
         "CALL_SITE",        # 函式呼叫點
         "INVARIANT_GUARD",  # 模態確認、權限檢查、參數驗證
         "SIDE_EFFECT",      # DOM 變更、RPC 網路請求、Toast 提示
@@ -40,6 +41,10 @@ class UIACodeGraph:
 
     def __init__(self, name: str = "UIA Semantic Graph"):
         self.g = nx.DiGraph(name=name, version="2.0")
+        if "imports" not in self.g.graph:
+            self.g.graph["imports"] = []
+        if "exports" not in self.g.graph:
+            self.g.graph["exports"] = {}
 
     # --- 節點新增方法 ---
 
@@ -74,6 +79,10 @@ class UIACodeGraph:
         status: str = "VALID",
         sequence_order: int = 1,
         detail: str = "",
+        is_conditional: bool = False,
+        guard_type: str = "NONE",
+        guard_expr: str = "",
+        is_error_handled: bool = False,
     ):
         if edge_type not in self.EDGE_TYPES:
             raise ValueError(f"無效的邊類別: {edge_type}，允許值: {self.EDGE_TYPES}")
@@ -88,6 +97,10 @@ class UIACodeGraph:
             status=status,
             sequence_order=sequence_order,
             detail=detail,
+            is_conditional=is_conditional,
+            guard_type=guard_type,
+            guard_expr=guard_expr,
+            is_error_handled=is_error_handled,
         )
 
     # --- 序列化 (NetworkX Native Node-Link Format) ---
@@ -187,41 +200,64 @@ class UIACodeGraph:
         1. 檢查是否存在閉包作用域阻隔 (ReferenceError / Scope trap)
         2. 檢查是否存在主執行緒阻塞危害 (window.confirm, alert, time.sleep)
         """
-        scope_errors = []
-        hazards = []
+        raw_scope_errors: Dict[Any, Dict[str, Any]] = {}
+        raw_hazards: Dict[Any, Dict[str, Any]] = {}
+        reported_targets: Set[str] = set()
 
-        # 檢測所有的邊
+        # 檢測所有的邊並去重彙整
         for u, v, d in self.g.edges(data=True):
             status = d.get("status")
             if status == "BLOCKED_SCOPE":
                 src_data = self.g.nodes.get(u, {})
                 dst_data = self.g.nodes.get(v, {})
-                scope_errors.append({
-                    "type": "SCOPE_VIOLATION",
-                    "caller": u,
-                    "target": v,
-                    "caller_scope": src_data.get("scope", {}),
-                    "target_scope": dst_data.get("scope", {}),
-                    "detail": d.get("detail", "目標函式被封閉於不可達之閉包作用域中"),
-                })
+                base_target = v.split("@")[0].split(":")[-1]
+                key = (base_target, d.get("detail", ""))
+                if key not in raw_scope_errors:
+                    raw_scope_errors[key] = {
+                        "type": "SCOPE_VIOLATION",
+                        "caller": u,
+                        "target": v,
+                        "caller_scope": src_data.get("scope", {}),
+                        "target_scope": dst_data.get("scope", {}),
+                        "detail": d.get("detail", "目標函式被封閉於不可達之閉包作用域中"),
+                        "count": 1,
+                    }
+                else:
+                    raw_scope_errors[key]["count"] += 1
             elif status == "BLOCKED_INVARIANT":
-                hazards.append({
-                    "type": "INVARIANT_VIOLATION",
-                    "source": u,
-                    "target": v,
-                    "detail": d.get("detail", "觸發不可接受的阻塞或危險操作"),
-                })
+                reported_targets.add(v)
+                base_target = v.split("@")[0].split(":")[-1]
+                key = ("INVARIANT_VIOLATION", base_target, d.get("detail", ""))
+                if key not in raw_hazards:
+                    raw_hazards[key] = {
+                        "type": "INVARIANT_VIOLATION",
+                        "source": u,
+                        "target": v,
+                        "detail": d.get("detail", "觸發不可接受的阻塞或危險操作"),
+                        "count": 1,
+                    }
+                else:
+                    raw_hazards[key]["count"] += 1
 
-        # 檢測節點危害屬性
+        # 檢測節點危害屬性 (若該目標節點已在邊上的 BLOCKED_INVARIANT 報告過，則不重複回報)
         for n, d in self.g.nodes(data=True):
             props = d.get("props", {})
-            if props.get("is_blocking"):
-                hazards.append({
-                    "type": "BLOCKING_API",
-                    "node": n,
-                    "label": d.get("label"),
-                    "detail": f"使用了同步阻塞 API ({d.get('label')})，破壞非同步流暢度",
-                })
+            if props.get("is_blocking") and n not in reported_targets:
+                base_node = n.split("@")[0].split(":")[-1]
+                key = ("BLOCKING_API", base_node, d.get("label"))
+                if key not in raw_hazards:
+                    raw_hazards[key] = {
+                        "type": "BLOCKING_API",
+                        "node": n,
+                        "label": d.get("label"),
+                        "detail": f"使用了同步阻塞 API ({d.get('label')})，破壞非同步流暢度",
+                        "count": 1,
+                    }
+                else:
+                    raw_hazards[key]["count"] += 1
+
+        scope_errors = list(raw_scope_errors.values())
+        hazards = list(raw_hazards.values())
 
         passed = (len(scope_errors) == 0 and len(hazards) == 0)
         verdict = "🟢 READY_TO_SHIP" if passed else "🔴 BLOCKED_BY_INVARIANTS"
@@ -292,7 +328,8 @@ class UIACodeGraph:
                     lines.append(f"{indent}{branch}{status_icon}⚠️ **{order_prefix}{target_label}()** _(阻塞危害: 違反非同步守衛)_")
                 else:
                     flow_badge = "⏳ [await] " if flow_type == "AWAIT" else ""
-                    lines.append(f"{indent}{branch}{status_icon}🔒 {flow_badge}{order_prefix}`{target_label}()`")
+                    guard_badge = "🛡️ [guarded] " if data.get("is_conditional") else ""
+                    lines.append(f"{indent}{branch}{status_icon}🔒 {flow_badge}{guard_badge}{order_prefix}`{target_label}()`")
             elif edge_type == "SEQUENTIAL":
                 lines.append(f"{indent}{branch}⏳ [串聯 await] ➔ `{target_label}()`")
             elif edge_type == "CONCURRENT":

@@ -101,8 +101,30 @@ class RustUIAGraphBuilder(BaseUIAGraphBuilder):
                             "is_async": is_async,
                             "impl_type": curr_impl or "",
                             "raw_name": raw_name,
+                            "executable_fingerprint": self.compute_executable_fingerprint(node),
                         },
                     )
+
+            elif ntype in ("const_item", "static_item"):
+                start_row = get_line(node.start_byte)
+                end_row = get_line(node.end_byte)
+                source_code_slice = decode_slice(node.start_byte, node.end_byte)
+                name_node = node.child_by_field_name("name")
+                var_name = decode_slice(name_node.start_byte, name_node.end_byte) if name_node else f"state_{start_row}"
+                state_id = f"state:{var_name}@{file_path}:L{start_row}"
+                graph.add_node_rich(
+                    node_id=state_id,
+                    label=var_name,
+                    category="MODULE_STATE",
+                    scope={"scope_id": "scope:global", "file": file_path, "line": start_row},
+                    props={
+                        "signature": f"[Module State] {var_name}",
+                        "source_code": source_code_slice,
+                        "line_start": start_row,
+                        "line_end": end_row,
+                        "executable_fingerprint": self.compute_executable_fingerprint(node),
+                    }
+                )
 
             if cursor.goto_first_child():
                 continue

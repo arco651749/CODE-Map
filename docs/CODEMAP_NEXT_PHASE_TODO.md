@@ -1,212 +1,199 @@
-# 🛠️ CODE-Map 架構升級與底層修正工程清單 (Engineering TODO List)
+# 🛠️ CODE-Map 靜態分析與差分引擎：Phase 2 核心修復與升級 TODO List (v2.1)
 
-> **文檔目標**：供另一台 Antigravity Agent 直接讀取並無縫執行架構升級。  
-> **核心背景**：經過 Gemini 3.8 初版實作、Opus 5.5 補充 `Spec Objection` 流程，以及第三輪深度源碼審計後，確認現有 CODE-Map 在「單檔語意 Diff」表現優異，但若要真正落地為 **Multi-Agent 反向規格驗收裁判 (Spec-Driven Verifier)**，必須解決以下 **3 大核心工程斷層** 與 **2 項防禦性補正**。
-
----
-
-## 📋 任務總覽與執行優先級 (Execution Checklist)
-
-- [ ] **Task 1 (P0 - 補齊真裁判)**：新增 `uia_coder/core/spec_verifier.py`，實作基於「有向路徑可達性與拓樸偏序 (Path Reachability & Topological Partial Order)」的 `SpecVerifier`，並掛載至 `cli.py --verify-spec`。
-- [ ] **Task 2 (P0 - 修補底層 Bug 與強化 AST 邊語意)**：
-  - [ ] **2A**：修正 `uia_coder/core/differ.py` 中 `get_canonical_id()` 同名函式碰撞覆蓋 Bug，改用包含詞法作用域鏈的 **Qualified Lexical Path**。
-  - [ ] **2B**：在 6 大語言適配器與 `graph.py` 的呼叫邊（`CALLS` / `RESOLVES_TO`）中，新增 AST **條件守衛 (`is_conditional` / `guard_expr`)** 與 **異常處理 (`is_error_handled`)** 屬性標註。
-- [ ] **Task 3 (P1 - 打通跨檔接線)**：新增 `uia_coder/core/workspace_graph.py`，支援跨檔案 `import` / `export` 符號消解與多檔圖譜拼接 (`build_project_graph`)，解決 Subagent A (API) 與 Subagent B (UI) 跨檔斷電問題。
-- [ ] **Task 4 (P2 - 防禦性補正)**：
-  - [ ] **4A**：在 `SpecVerifier` 中實作 `verify_objection_evidence()`，用 AST 實地查核 Subagent 提出的 `Spec Objection`，防止幻覺偷懶。
-  - [ ] **4B**：修正 `tools/audit_*.py` 基準測試指標，將「結構性因果圖變動 (`Structural Graph Delta`)」與「純函式內文字變動 (`Function Body Text Delta`)」分開統計，消除白皮書數據水分。
+> **文檔目標**：供 **Gemini 3.8**（或另一台 Antigravity Agent）直接讀取並無縫執行底層修復與架構升級。  
+> **核心背景**：在完成 Phase 1（`SpecVerifier`、跨檔 `WorkspaceGraphBuilder`、35 專案 693 Commits 全景基準審查）後，經由「資深靜態分析架構師與編譯器專家（Principal Static Analysis & Compiler Architect）」對 `reports/EXTERNAL_MODEL_REVIEW_PACK.md` 進行嚴格 Red-Team Audit，定位出 **6 個影響形式化驗收公信力的關鍵問題**：
+> 1. **閉包作用域斷鏈誤報**：JS/TS Adapter 階段 1 與階段 2 的 Scope ID 不一致，將定義在 `scope:global` 的模組私有函式誤判為 `BLOCKED_SCOPE`（如 `Sortable` 與 `Preact`）。
+> 2. **純註釋與純型別變更滲漏**：函式變更檢測直接比對 `source_code` 字串，導致僅加一行 `//exhaustive:ignore` 註釋（如 `Caddy` Commit #03）或僅改 Type Annotation（如 `vLLM` Commit #02）被灌水進 `BODY_LEVEL_SEMANTIC_DELTA`。
+> 3. **歷史技術債連坐處罰**：Commit Diff 的驗收裁決直接讀取 `invariants_after`，未扣除 `invariants_before` 已存在的舊違規，且同一違規按呼叫點重複印出 10~20 次。
+> 4. **非 UI 後端專案的 Widget 命名幻覺**：Python Adapter 對任何 `on_xxx_yyy` 命名的方法無條件拆解為 Textual UI 控制項，導致 `vLLM` 的 `MooncakeConnector.on_new_request()` 被幻覺為 `🌲 #new (Widget) -> ⚡ on('request')`。
+> 5. **多行型別簽章截斷與非 UI 圖譜差分空白**：Python/TS 函式簽章用 `split(":")[0]` 擷取導致在第一個參數型別冒號處斷開；且無 UI Anchor 的後端專案在 `STRUCTURAL_GRAPH_DELTA` 時未列出新增/移除的具體節點與呼叫邊。
+> 6. **頂層常數與映射表漏報**：模組頂層（Module-Scope）常數字典或映射表修改（如 `Preact` Commit #13 `compat/src/render.js`）因不在 `FUNCTION_DEF` 內而被漏判為 `ZERO_DELTA`。
 
 ---
 
-## 🥇 Task 1：實作路徑偏序規格驗收器 (`SpecVerifier`)
+## 📋 Phase 2 任務總覽與執行優先級 (Execution Checklist for Gemini 3.8)
 
-### 1. 為什麼要改？ (Why / Root Cause)
-* **現狀問題**：目前 `uia_coder/core/differ.py` 的 `UIAGraphDiffer.diff_graphs(g_before, g_after)` 採用的是 **精確邊對邊比對 (Exact Edge-to-Edge Matching)**：
-  ```python
-  edges_added = [k for k in edges_canon_a if k not in edges_canon_b]
-  edges_removed = [k for k in edges_canon_b if k not in edges_canon_a]
-  ```
-* **致命後果**：當上位 Architect Agent 定義規格圖譜 `Spec Graph` 時，通常只指定關鍵業務節點，例如：
-  `#btnDelete ➔ click ➔ confirmModal ➔ deleteItemRpc`
-  但 Subagent 在實作時，為了遵循 Clean Code，極可能抽取私有輔助函式（Helper Functions）：
-  `#btnDelete ➔ click ➔ handleDeleteClick ➔ validateSelection ➔ confirmModal ➔ executeDelete ➔ deleteItemRpc`
-  若直接拿 `UIAGraphDiffer` 比對 `Spec` 與 `Actual`，會因為中間多出 `handleDeleteClick` 等中繼節點，導致規格要求的直接邊 `(confirmModal -> deleteItemRpc)` 被判定為 **「已拆除 (Removed Edge)」**，將完全合法且優質的實作誤判為違規退件！
-
-### 2. 要怎麼改？ (How / Implementation Spec)
-
-```mermaid
-flowchart LR
-    subgraph Spec["📐 Spec Graph (上位契約)"]
-        S_Btn["#btnDelete"] ==>|"WIRES_TO"| S_Evt["click"]
-        S_Evt ==>|"TRIGGERS (path)"| S_Modal["confirmModal()"]
-        S_Modal ==>|"SEQUENTIAL + AWAIT (path)"| S_Rpc["deleteItemRpc()"]
-    end
-
-    subgraph Actual["🌲 Actual Code Graph (Subagent 實作)"]
-        A_Btn["#btnDelete"] --> A_Evt["click"]
-        A_Evt --> A_Helper1["onDeleteBtnClick()"]
-        A_Helper1 -->|"await"| A_Modal["confirmModal()"]
-        A_Helper1 -->|"if (ok) + await"| A_Helper2["doDelete()"]
-        A_Helper2 -->|"await"| A_Rpc["deleteItemRpc()"]
-    end
-
-    Spec -.->|"拓樸路徑可達與偏序投射驗證 (PASS)"| Actual
-```
-
-1. **新增檔案**：`d:\AntiGravity\UIA_Coder\uia_coder\core\spec_verifier.py`
-2. **核心資料結構 (`SpecContract`)**：
-   支援從 JSON / YAML 或 `UIACodeGraph` 載入規格，包含：
-   * `required_anchors`: 必須存在的 UI/CLI 控制項錨點（例如 `#btnDelete`）。
-   * `required_causal_chains`: 有序因果鏈要求（例如 `["#btnDelete", "confirmModal", "deleteItemRpc"]`），以及每個階段的約束（如 `require_await: True`, `require_conditional_guard: True`）。
-   * `invariants`: 全域守衛要求（預設 `no_scope_trap: True`, `no_blocking_api: True`）。
-3. **核心演算法 (`SpecVerifier.verify(spec_graph, actual_graph)`)**：
-   * **Step 1 (全域不變量守衛)**：先呼叫 `actual_graph.check_invariants()`，若有 `BLOCKED_SCOPE` 或 `BLOCKED_INVARIANT` 直接攔截。
-   * **Step 2 (錨點存在性檢查)**：確認 `Spec` 中所有 `UI_CONTROL` 節點在 `Actual` 中皆有對應的 Canonical / Label 節點。
-   * **Step 3 (有向路徑可達性 Path Reachability)**：
-     對於 `Spec` 中的每一條關鍵因果邊 $(u_{spec} \to v_{spec})$：
-     - 若 $u_{spec}$ 與 $v_{spec}$ 是**控制項到目標函式**或**父函式到子函式**，使用 `nx.has_path(actual_graph.g, u_actual, v_actual)` 檢查是否存在有向路徑（允許中間經過任意數量的 Helper 函式）。
-     - 若兩者都是由同一個父處理常式依序呼叫的兄弟階段（例如 `handleDelete` 內先呼叫 `confirmModal` Stage 1，再呼叫 `deleteItemRpc` Stage 2），則找到兩者在 `Actual` 中的最近共同祖先函式節點（Lowest Common Ancestor Function $LCA$），檢查從 $LCA$ 出發到達 $u_{actual}$ 的入口邊 `sequence_order` 是否嚴格小於到達 $v_{actual}$ 的入口邊 `sequence_order`（$\text{order}(u) < \text{order}(v)$）。
-   * **Step 4 (非同步時序傳遞驗證)**：
-     若 `Spec` 要求某階段必須為 `flow_type == "AWAIT"`，則檢查 `Actual` 中從父處理常式到目標節點的呼叫路徑上，至少有一條關鍵呼叫邊帶有 `flow_type == "AWAIT"`。
-   * **Step 5 (輸出 Proof-Carrying 違規報告)**：
-     若驗證失敗，回傳結構化 JSON 與 Markdown 報告，精確列出：哪一條規格契約邊斷裂、目前 `Actual Graph` 在該錨點下的實際展開樹為何、建議修復位置（行號）。
-4. **CLI 整合 (`uia_coder/cli.py`)**：
-   * 新增參數：`--verify-spec <SPEC_FILE>`（可搭配 `--file <CODE_FILE>` 或多檔案）。
+- [x] **Task P0-1 (消滅閉包誤報)**：修復 `javascript_adapter.py` 與 `typescript_adapter.py` 階段 1 / 階段 2 的 Scope 追蹤斷鏈與 `scope:global` 誤判，徹底解決 `Sortable` 與 `Preact` 的 `BLOCKED_SCOPE` 假陽性。
+- [x] **Task P0-2 (AST 語意去噪比對)**：在 `base_adapter.py` 與 `differ.py` 實作 `extract_executable_tokens()`（剝除 AST 中的 `comment` 與純 `type_annotation` 節點），杜絕註釋微調（如 `Caddy` `//exhaustive:ignore`）滲漏至 `BODY_LEVEL_SEMANTIC_DELTA`。
+- [x] **Task P0-3 (差分不變量守衛與去重)**：在 `graph.py` 與 `differ.py` 實作違規去重（Deduplication）與 **Differential Invariant Verification**（僅當本次 Commit **新引入** 違規時才判為 `🔴 BLOCKED_BY_INVARIANTS`，既有違規標示為 `ℹ️ PRE_EXISTING_DEBT`）。
+- [x] **Task P1-1 (拔除後端專案 UI 幻覺)**：在 `python_adapter.py` 增加 UI 框架上下文守衛（檢查 `imports` 或 Base Classes），禁止在 `vLLM`、`FastAPI` 等純後端專案上將 `on_new_request` 拆解為 `#new (Widget)`。
+- [x] **Task P1-2 (修復簽章截斷 + 輸出結構差分明細)**：修復 `python_adapter.py` 等處的 `split(":")[0]` 簽章截斷問題；並在 `differ.py` 的 `to_diff_markdown()` 中為無 UI 錨點的專案輸出 `+Nodes / -Nodes / +Edges / -Edges` 的具體符號明細。
+- [x] **Task P2-1 (納管頂層常數狀態 `MODULE_STATE`)**：在 `graph.py`、各語言 Adapter 與 `differ.py` 中新增對頂層常數/查找表 (`MODULE_STATE`) 的追蹤與差分，捕獲如 `Preact` Commit #13 的頂層映射表修復。
 
 ---
 
-## 🥈 Task 2：修正 `differ.py` 同名函式碰撞 Bug 與強化 AST 條件/異常邊語意
+## 🔥 Task P0-1：修復 JS/TS 閉包作用域斷鏈與 `scope:global` 誤判
 
-### 子任務 2A：修正 `get_canonical_id` 同名碰撞覆蓋問題
+### 1. 問題根因定位 (Root Cause)
+* **檔案位置**：
+  * [`uia_coder/adapters/javascript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/javascript_adapter.py#L287-L348)
+  * [`uia_coder/adapters/typescript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/typescript_adapter.py)
+* **Bug 解剖**：
+  1. 在階段 1 `_collect_scopes_and_functions` (L287~L348) 走訪 `assignment_expression`（例如 `Sortable.prototype = { ... }` 或 `_onDragStart = function() {}`）時，建立了 `new_scope_id = f"scope:{method_name}@{file_path}:L{start_line}C{start_col}"`，且 `scopes[new_scope_id]` 的字典有時漏設 `"parent": current_scope_id`（見 L306~L312、L361~L367，**漏寫了 `"parent": current_scope_id`！**）。
+  2. 在階段 2 `_wire_ui_and_calls` (L418~L440) 中，沒有 `assignment_expression` 的對應 Scope 切換分支，導致階段 2 查詢 `scopes.get(curr, {}).get("parent")` 時拿到 `None`，作用域向上查找鏈當場斷裂！
+  3. 當向上查找失敗後，程式進入 [`javascript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/javascript_adapter.py#L824-L846) 的 `else` 分支掃描全表 `scopes.items()`，把明明定義在 `scope:global`（頂層模組作用域，對檔案內所有函式 100% 可達）的私有輔助函式（如 `_dispatchEvent`, `pluginEvent`, `closest`, `enqueueRender`）當成 `isolated_def`，印出矛盾的錯誤訊息：
+     `💥 作用域阻隔: 函式 'pluginEvent' 被深鎖在內部閉包 (scope:global)，外部無法調用！`
 
-#### 1. 為什麼要改？ (Why / Root Cause)
-* **問題定位**：[`uia_coder/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/differ.py#L13-L17) 第 13~17 行與第 266~267 行：
-  ```python
-  def get_canonical_id(node_data: Dict[str, Any], fallback_id: str) -> str:
-      cat = node_data.get("category", "")
-      label = node_data.get("label", fallback_id)
-      return f"{cat}:{label}"
-  ...
-  rev_canon_b = {v: k for k, v in canon_b.items()}
-  rev_canon_a = {v: k for k, v in canon_a.items()}
-  ```
-* **致命後果**：當同一個檔案內有兩個不同元件、類別或閉包定義了同名函式（例如兩個 React Component 內部都有 `const handleClick = () => {}`，或兩個 Closure 內都有 `function init()`），它們的 `canonical_id` 都會變成 `FUNCTION_DEF:handleClick`。
-  在建立 `rev_canon_b` 與 `edges_canon_b` 字典時，**後出現的節點會無聲無息地覆蓋掉先出現的節點**，導致圖差分漏掉前一個函式的所有變更與接線！
-
-#### 2. 要怎麼改？ (How / Implementation Spec)
-1. **修改 `uia_coder/core/differ.py` 的 `get_canonical_id()`**：
-   * 從 `node_data.get("scope", {})` 中提取 `scope_id`。
-   * 將 `scope_id` 中包含行號與檔名的後綴剝除，還原出**詞法作用域階層路徑 (Lexical Scope Chain)**。
-     例如：`scope:UserModal@app.tsx:L10` 內部的 `handleClick`，其 Qualified ID 應為：
-     `FUNCTION_DEF:UserModal::handleClick`（若在全域則為 `FUNCTION_DEF:global::handleClick`）。
-   * 更好且一勞永逸的做法：在各語言 Adapter 建立 `scopes[new_scope_id]` 時，直接維護一個 `"qualified_path": "UserModal.init"` 字串並寫入節點的 `scope["qualified_path"]`，讓 `get_canonical_id()` 直接讀取 `f"{cat}:{qualified_path}::{label}"`。
-   * 若在同一作用域內仍有極少數同名重載（如 TypeScript overload 或重複綁定），在建立 `rev_canon` 時檢測碰撞並附加序號 `#1`, `#2`，絕不允許字典靜默覆寫。
+### 2. 修改規格 (Implementation Spec)
+1. **補齊 `"parent": current_scope_id`**：
+   檢查 `javascript_adapter.py` (特別是 L306~L312 的 `assignment_expression` 與 L361~L367 的 `method_definition` / `pair`) 以及 `typescript_adapter.py` 中所有建立 `scopes[new_scope_id] = { ... }` 的地方，確保**每一個 Scope 字典都包含 `"parent": current_scope_id`**。
+2. **使用 `node_scope_map: Dict[int, str]` 統一階段 1 與階段 2 的 Scope ID**：
+   在 `parse_and_build` 中初始化 `node_scope_map: Dict[int, str] = {}`。在階段 1 `_collect_scopes_and_functions` 決定 `next_scope_id` 後，記錄 `node_scope_map[node.id] = next_scope_id`；在階段 2 `_wire_ui_and_calls` 直接以 `next_scope_id = node_scope_map.get(node.id, current_scope_id)` 取得，消除兩階段手動拼湊字串不一致的問題。
+3. **頂層與祖先作用域安全防呆**：
+   在 `_link_handler_with_reachability` 中，若全域掃描找到的 `isolated_scope_id == "scope:global"`（代表目標函式定義於模組頂層），則該呼叫在詞法作用域上必然可達，**必須走 `status="VALID"` 分支**，絕不可標記為 `BLOCKED_SCOPE`。
 
 ---
 
-### 子任務 2B：在 AST 呼叫邊加入「條件分支守衛 (`is_conditional`)」與「錯誤捕捉 (`is_error_handled`)」
+## 🔥 Task P0-2：實作「正規化 AST 可執行 Token 指紋」，消除註釋與純型別變更滲漏
 
-#### 1. 為什麼要改？ (Why / Root Cause)
-* **現狀問題**：目前的圖譜只知道「函式 A 先呼叫了 `confirmModal()`，後呼叫了 `deleteItemRpc()`」，卻不知道 **`deleteItemRpc()` 是否受到 `if (confirmed)` 的條件保護**！
-  如果 Subagent 寫出以下致命 Bug：
-  ```javascript
-  async function onDelete() {
-      const ok = await confirmModal("確定刪除？");
-      // Bug: 忘了寫 if (!ok) return; 直接往下刪！
-      await deleteItemRpc(id);
-  }
-  ```
-  現有的 CODE-Map 會給出 `🟢 READY_TO_SHIP`，因為 `confirmModal` 和 `deleteItemRpc` 都通電且都有 `await`！
+### 1. 問題根因定位 (Root Cause)
+* **檔案位置**：
+  * [`uia_coder/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/differ.py#L355-L378)
+  * [`uia_coder/core/base_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/base_adapter.py)
+* **Bug 解剖**：
+  `differ.py` 第 364~366 行直接用 `src_b != src_a`（原始碼字串比對）判定函式是否發生實作變更。這導致：
+  * `Caddy` Commit #03 (`1619352f`) 在 3 個 `.go` 檔案的 `switch` 前各加了一行 `//exhaustive:ignore` 註釋，被算進 `BODY_LEVEL_SEMANTIC_DELTA` (`ΔFuncs: 1`)。
+  * `vLLM` Commit #02 (`143ee3b4`) 在 `_validate_step5_dsa_attention_contract` 僅修改參數型別標註 `alibi_slopes: list[float] | torch.Tensor | None`，也被算進 `BODY_LEVEL_SEMANTIC_DELTA`。
 
-#### 2. 要怎麼改？ (How / Implementation Spec)
-1. **在 `BaseUIAGraphBuilder` (`uia_coder/core/base_adapter.py`) 新增共用 AST 祖先檢查輔助方法**：
+### 2. 修改規格 (Implementation Spec)
+1. **在 `BaseUIAGraphBuilder` (`uia_coder/core/base_adapter.py`) 新增 `compute_executable_fingerprint(node: Any) -> str`**：
+   * 撰寫一個遞迴或 Stack 走訪 Tree-sitter `node` 的輔助方法，收集所有葉節點（Leaf Nodes，`len(curr.children) == 0`）的 Token 文字，但**跳過（Skip）以下非執行語意子樹**：
+     * 節點 `type` 包含 `"comment"`（如 `comment`, `line_comment`, `block_comment`）。
+     * 純型別標註節點：`type` 為 `"type_annotation"`, `"type_arguments"`, `"type_parameters"`, `"type_parameter"`, `"return_type"`, `"generic_type"`，或父節點欄位為 `type`（如 Python `typed_parameter` / `typed_default_parameter` 的 `type` 子節點）。
+     * Python 函式 `body` (`block`) 的第一個子節點若為純字串常數（Docstring），予以跳過。
+   * 將收集到的可執行葉節點 Token 以空白串接並計算 SHA-256 或正規化字串，存入函式節點 `props["executable_fingerprint"]`。
+2. **在 6 大語言 Adapter 建立 `FUNCTION_DEF` 節點時**：
+   呼叫 `self.compute_executable_fingerprint(func_node)` 並寫入 `props["executable_fingerprint"]`。
+3. **在 `UIAGraphDiffer.diff_graphs` (`uia_coder/core/differ.py` L364~L366)**：
    ```python
-   def _inspect_control_context(self, call_node, enclosing_func_node) -> Dict[str, Any]:
-       """
-       從 call_node 向上走訪 parent 直到 enclosing_func_node，
-       檢查該呼叫點是否位於條件分支 (if / switch / match / 三元運算) 或異常處理 (try / catch) 內部，
-       或是該函式在此呼叫點之前是否已有 early-return 守衛 (if (...) return)。
-       """
+   fp_b = props_b.get("executable_fingerprint")
+   fp_a = props_a.get("executable_fingerprint")
+   is_modified = (fp_b != fp_a) if (fp_b is not None and fp_a is not None) else (src_b != src_a)
+   if src_b and src_a and is_modified:
+       # 列入 functions_modified
    ```
-   * **判定條件保護 (`is_conditional: bool`)**：
-     1. **直接包裹**：`call_node` 的祖先節點（在函式邊界內）包含 `if_statement`、`switch_statement`、`match_expression`、`conditional_expression`（三元運算子）或邏輯短路 `binary_expression` (`&&` / `||`)。
-     2. **Early-Return 守衛（極重要）**：在同一個 `block` 內，排在 `call_node` 之前的兄弟語句（preceding siblings）中，存在包含 `return_statement` 或 `throw_statement` 的 `if_statement`（例如 `if (!ok) return;`）。
-   * **判定異常保護 (`is_error_handled: bool`)**：
-     `call_node` 的祖先節點包含 `try_statement`（Python/JS/TS/C#）、`.catch()` 鏈式呼叫、Rust 的 `?` (`try_expression`) / `match`，或 Go 緊隨其後的 `if err != nil`。
-2. **擴充 `UIACodeGraph.add_edge_rich()` (`uia_coder/core/graph.py`)**：
-   * 在邊的屬性中支援 `is_conditional: bool = False`、`guard_type: str = "NONE"`（可為 `"IF_BRANCH"`, `"EARLY_RETURN_GUARD"`, `"SHORT_CIRCUIT"`）與 `is_error_handled: bool = False`。
-   * 在 `to_uia_markdown()` 輸出時，若帶有條件守衛，顯示 `🛡️ [guarded]` 標記（例如 `🔒 ⏳ [await] 🛡️ [guarded] [Stage 2] deleteItemRpc()`），讓架構師與 `SpecVerifier` 一眼看穿有沒有漏寫 `if (!ok) return`。
 
 ---
 
-## 🥉 Task 3：打通跨檔案符號消解與多檔圖譜拼接 (`WorkspaceGraphBuilder`)
+## 🔥 Task P0-3：實作「差分不變量守衛 (Differential Invariants)」與違規去重
 
-### 1. 為什麼要改？ (Why / Root Cause)
-* **現狀問題**：目前所有 Adapter 的 `parse_and_build(source_code, file_path)` 都是**單檔封閉解析**。
-* **致命後果**：在真實專案與 Multi-Agent 協同中：
-  * **Subagent A** 負責寫 `src/api/user_api.ts`：`export async function deleteUserRpc(id: string) { ... }`
-  * **Subagent B** 負責寫 `src/components/UserPanel.tsx`：`import { deleteUserRpc } from '../api/user_api';` 並在 `<button onClick={handleDelete}>` 中呼叫 `deleteUserRpc(userId)`。
-  * 在現有單檔架構下，分析 `UserPanel.tsx` 時，`deleteUserRpc` 在本檔找不到 `FUNCTION_DEF`，因此無法得知 `deleteUserRpc` 內部是否有阻塞危害（如 `window.confirm`）、是否為 `async` 函式，也無法透過 `to_causal_code_bundle("#btnDelete")` 把 `user_api.ts` 裡的實作碼一起打包出來！
+### 1. 問題根因定位 (Root Cause)
+* **檔案位置**：
+  * [`uia_coder/core/graph.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/graph.py#L196-L251)
+  * [`uia_coder/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/differ.py#L98-L164)
+* **Bug 解剖**：
+  1. `graph.py` 的 `check_invariants()` 在遍歷邊與節點時未去重，且對於 `panic()` 既在邊上觸發一次 `INVARIANT_VIOLATION`（`呼叫了執行期恐慌中斷常式: panic()`），又在節點上因為 `is_blocking: True` 觸發一次 `BLOCKING_API`（`使用了同步阻塞 API (panic())`），導致 Caddy 單一檔案印出 20 行重複警告。
+  2. `differ.py` 的 `UIAGraphDiffResult.passed` 直接回傳 `self.invariants_after["passed"]`。如果一個舊檔案原本就有 `panic()`，任何修改該檔案的 Commit 都會被無差別攔截為 `🔴 BLOCKED_BY_INVARIANTS`。
 
-### 2. 要怎麼改？ (How / Implementation Spec)
+### 2. 修改規格 (Implementation Spec)
+1. **在 `graph.py` 的 `check_invariants()` 進行去重與分類修正**：
+   * 若節點已在邊的 `BLOCKED_INVARIANT` 中被報告過，不再於節點迴圈重複報告第二次；或針對 `panic()` 將其 `props["is_blocking"]` 改為 `props["is_abrupt_exit"] = True`，避免同一顆 `panic()` 節點產生兩條不同名目的警告。
+   * 對 `scope_errors` 與 `hazards` 以 `(item.get("caller", ""), item.get("target", item.get("label", "")), item.get("detail", ""))` 去重，若重複出現則統計次數 `count`（如 `(共 5 處呼叫)`）。
+2. **在 `differ.py` 的 `UIAGraphDiffResult` 實作差分守衛**：
+   * 比對 `invariants_before` 與 `invariants_after`（以正規化後的 `(target_label, detail)` 為比對鍵）：
+     * **`new_scope_errors` / `new_hazards`**：在 `after` 出現、但不在 `before` 中的新增違規（或同類違規數量增加）。
+     * **`pre_existing_scope_errors` / `pre_existing_hazards`**：在 `before` 與 `after` 中皆存在的既有違規。
+   * 修改 `passed` 與 `verdict` 屬性：
+     * 僅當 `len(new_scope_errors) > 0 or len(new_hazards) > 0` 時，`passed = False`，`verdict = "🔴 BLOCKED_BY_INVARIANTS"`。
+     * 若無新增違規（即使有存量舊違規），`passed = True`，`verdict = "🟢 READY_TO_SHIP"`（並在 `to_diff_markdown()` 中以單行摘要顯示：`ℹ️ 存量環境提醒: 檔案內含 N 項既有非阻塞提醒 (非本次 Commit 引入)`）。
 
-```mermaid
-flowchart TD
-    F1["📄 File A: src/components/UserPanel.tsx<br/>import { deleteUserRpc } from '../api/user_api'"]
-    F2["📄 File B: src/api/user_api.ts<br/>export async function deleteUserRpc()"]
+---
 
-    F1 --> G1["單檔圖 A (含 IMPORT_SYMBOL 佔位節點)"]
-    F2 --> G2["單檔圖 B (含 EXPORT 標記之 FUNCTION_DEF)"]
+## 🛠️ Task P1-1：拔除 Python 後端專案的 Textual UI 命名幻覺
 
-    G1 & G2 --> Linker["🔗 WorkspaceGraphLinker (跨檔符號消解器)"]
-    Linker -->|"將 File A 對 deleteUserRpc 的呼叫邊<br/>重連 (Rewire) 至 File B 的真實 FUNCTION_DEF"| Unified["🌐 跨檔案統一 UIACodeGraph"]
+### 1. 問題根因定位 (Root Cause)
+* **檔案位置**：[`uia_coder/adapters/python_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/python_adapter.py#L308-L362)
+* **Bug 解剖**：
+  `_handle_textual_event_bindings` (L351) 只要看到任何 Python 方法名稱符合 `func_name.startswith("on_")` 且 `len(parts) >= 3`，就無條件將 `parts[1]` 當成 UI Widget 控制項（如 `vLLM` 的 `on_new_request` 被拆成 `#new (Widget)` 與 `on('request')`）。
+
+### 2. 修改規格 (Implementation Spec)
+1. 在 `PythonUIAGraphBuilder.parse_and_build` 開始時，先檢查 `source_code` 是否包含 UI 框架特徵：
+   ```python
+   ui_keywords = ("textual", "PyQt", "PySide", "tkinter", "ttk", "wx", "kivy", "flet", "customtkinter")
+   has_ui_import = any(kw in source_code for kw in ui_keywords)
+   ```
+   並將 `has_ui_import` 存入實例屬性或傳遞給 `_wire_ui_and_calls`。
+2. 在 `_handle_textual_event_bindings` 中：
+   * 裝飾器 `@on(...)` 檢查維持不變。
+   * 命名約定 `if not event_name and func_name.startswith("on_"):` **必須加上守衛 `and self._has_ui_import`**，確保在 `vLLM`, `FastAPI`, `HTTPX`, `Pydantic` 等純後端專案中不會憑空捏造 `#new (Widget)` 控制項！
+
+---
+
+## 🛠️ Task P1-2：修復多行函式簽章截斷 Bug，並輸出非 UI 結構差分明細
+
+### 1. 問題根因定位 (Root Cause)
+* **檔案位置**：
+  * [`uia_coder/adapters/python_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/python_adapter.py#L147)
+  * [`uia_coder/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/differ.py#L112-L164)
+* **Bug 解剖**：
+  1. `python_adapter.py` L147 使用 `sig_text = full_text.split(":")[0].strip()` 提取簽章。當函式有參數型別註解（如 `def _get_multidict_value(field: ModelField, ...)`）時，會在第一個參數的 `:` 處被腰斬！
+  2. `differ.py` 的 `to_diff_markdown()` 只渲染 `get_ui_anchors()`。當 `Ratatui`、`FastAPI`、`Caddy` 發生 `STRUCTURAL_GRAPH_DELTA`（如 `+Nodes: 7, +Edges: 16`）但檔案內無 UI 控制項時，報告只印出 `_無任何 UI 控制項變更_`，完全看不出新增或刪除了哪 7 個節點與 16 條邊。
+
+### 2. 修改規格 (Implementation Spec)
+1. **精確提取函式簽章（利用 AST `body` 節點邊界）**：
+   在 `python_adapter.py` L147（並同步檢查 `typescript_adapter.py`, `rust_adapter.py`, `go_adapter.py`, `csharp_adapter.py`）：
+   ```python
+   body_node = node.child_by_field_name("body")
+   if body_node:
+       header_bytes = node.text[: body_node.start_byte - node.start_byte]
+       sig_text = " ".join(header_bytes.decode("utf-8", errors="replace").strip().rstrip(":").split())
+   else:
+       sig_text = " ".join(full_text.split("\n")[0].strip().rstrip(":").split())
+   ```
+2. **在 `differ.py` 的 `to_diff_markdown()` 補充結構拓樸差分明細**：
+   當 `self.nodes_added`、`self.nodes_removed`、`self.edges_added` 或 `self.edges_removed` 非空時，在 `to_diff_markdown()` 中增加 `🔗 **結構性拓樸圖變更明細 (Structural Graph Delta):**` 區塊，列出（最多前 15 項，超出則摺疊顯示 `... 等共 N 項`）：
+   * `+ [新增節點] {node_canon_id}` / `- [移除節點] {node_canon_id}`
+   * `+ [新增呼叫邊] {u} ──[{edge_type}{guard_info}]──> {v}`
+   * `- [移除呼叫邊] {u} ──[{edge_type}]──> {v}`
+
+---
+
+## 🛠️ Task P2-1：納管模組頂層常數與查找表變更 (`MODULE_STATE`)
+
+### 1. 問題根因定位 (Root Cause)
+* **檔案位置**：
+  * [`uia_coder/core/graph.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/graph.py#L17-L24)
+  * `uia_coder/adapters/*.py`
+  * [`uia_coder/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/differ.py#L354-L379)
+* **Bug 解剖**：
+  在 `Preact` Commit #13 (`4cb4f809`, `compat/src/render.js`) 中，開發者修改了模組頂層（Module-Scope）的常數/正則表達式映射表。因為該變更不在任何 `FUNCTION_DEF` 內，也未改變呼叫邊，導致被漏判為 `ZERO_DELTA`。
+
+### 2. 修改規格 (Implementation Spec)
+1. 在 `UIACodeGraph.CATEGORIES` (`graph.py`) 加入 `"MODULE_STATE"`。
+2. 在 JS/TS/Python/Go/Rust Adapter 中，當處於頂層作用域 (`current_scope_id == "scope:global"`) 且遇到頂層常數/變數宣告（如 JS/TS 的 `lexical_declaration` / `variable_declaration`、Python 的頂層 `assignment`、Rust 的 `const_item` / `static_item`、Go 的 `const_declaration` / `var_declaration`），若其右側值不是函式定義，則建立一個 `category="MODULE_STATE"` 節點（包含 `label`, `source_code`, `executable_fingerprint`, `line_start`, `line_end`）。
+3. 在 `differ.py` L356 的實作變更檢測中，將 `cid.startswith(("FUNCTION_DEF:", "MODULE_STATE:"))` 一併納入比對。若頂層常數的 `executable_fingerprint` 發生實質變更，同樣記入 `functions_modified`（可標註簽章為 `[Module State] {label}`），使其正確歸入 `BODY_LEVEL_SEMANTIC_DELTA`。
+
+---
+
+## ✅ 最終驗收與重跑指令 (Verification & Regeneration Commands)
+
+請 Gemini 3.8 在完成上述所有程式碼修改後，依序執行以下指令完成閉環驗收：
+
+```powershell
+# Step 1: 執行所有既有與新增的單元測試，確保 100% 通過
+python.exe -X utf8 -m unittest discover -s tests
+
+# Step 2: 重新生成 35 個開源專案的獨立形式化審查報告與 INDEX.md
+python.exe -X utf8 tools/generate_all_35_repo_verification_reports.py
+
+# Step 3: 重新打包單一自包含外部模型審查封包 (EXTERNAL_MODEL_REVIEW_PACK.md)
+python.exe -X utf8 tools/build_review_pack.py
 ```
 
-1. **在各語言 Adapter 中收集 `imports` 與 `exports` 元資料**：
-   * 在 `UIACodeGraph.g.graph`（圖級別 metadata 字典）中新增：
-     * `exports`: `Dict[exported_name, func_node_id]`（記錄本檔匯出的函式/方法節點 ID）。
-     * `imports`: `List[Dict]`（記錄 `{local_name, imported_name, module_specifier, line}`，例如從 `'../api/user_api'` 匯入 `deleteUserRpc`）。
-   * 優先實作 **TypeScript / JavaScript** (`import_statement`, `export_statement`) 與 **Python** (`import_from_statement`, `import_statement`)，再擴及 Go / Rust / C#。
-2. **新增檔案 `uia_coder/core/workspace_graph.py` (`WorkspaceGraphBuilder`)**：
-   * 提供 `build_from_files(file_paths: List[str], root_dir: str) -> UIACodeGraph` 方法。
-   * **Pass 1**：分別呼叫對應語言的 Adapter 產出各檔案的單檔 `UIACodeGraph`，並合併所有節點與邊至一張總圖 `merged_graph`。
-   * **Pass 2 (Cross-File Symbol Linking)**：
-     遍歷各檔案的 `imports` 表，解析相對路徑或模組路徑找到目標檔案，將呼叫端原本指向未解析外部呼叫點（或 `EXTERNAL_CALL`）的邊，以 `RESOLVES_TO` 連接到目標檔案中真實匯出的 `func_node_id`，同時檢查目標函式是否真的是 `export`（若目標函式忘了寫 `export`，則標記邊狀態為 `BLOCKED_SCOPE`，detail 為 `"跨模組作用域阻隔：目標函式未匯出 (Not Exported)"`！）。
-3. **CLI 擴充 (`uia_coder/cli.py`)**：
-   * 新增 `--files <FILE1> <FILE2> ...` 或 `--dir <DIR_PATH>` 參數，支援多檔案聯合建圖與跨檔 `--slice`、`--bundle`、`--verify-spec`。
+### 🎯 驗收必檢指標 (Acceptance Criteria)：
+1. **檢查 `Sortable` (`03_Sortable.md`) 與 `Preact` (`12_preact.md`)**：
+   不再出現 `函式 'xxx' 被深鎖在內部閉包 (scope:global)` 的假陽性錯誤，且 `Preact` Commit #13 (`4cb4f809`) 成功由 `ZERO_DELTA` 轉為 `BODY_LEVEL_SEMANTIC_DELTA`。
+2. **檢查 `Caddy` (`33_caddy.md`) Commit #03 (`1619352f`)**：
+   僅新增 `//exhaustive:ignore` 註釋的 3 個檔案（`context.go`, `responsewriter.go`, `service_windows.go`）正確歸類為 `ZERO_DELTA`，且 `context.go` 不再因既有 `panic()` 而被判為 `🔴 BLOCKED_BY_INVARIANTS` 或重複印出 20 行相同警告。
+3. **檢查 `vLLM` (`29_vllm.md`) Commit #01 (`34ac4f96`) 與 Commit #02 (`143ee3b4`)**：
+   Commit #01 不再出現 `#new (Widget)` 幻覺控制項；Commit #02 中純修改型別註解的 `_validate_step5_dsa_attention_contract` 不再被誤算為實作變動。
+4. **檢查 `FastAPI` (`14_fastapi.md`)**：
+   `_get_multidict_value` 與 `_extract_form_body` 的變更前後簽章完整顯示所有參數與回傳型別，不再於第一個 `:` 處截斷；且 `STRUCTURAL_GRAPH_DELTA` 區塊能清楚看到新增/移除的節點與呼叫邊明細。
 
 ---
 
-## 🛡️ Task 4：防禦性補正（異議防偽查核 + 基準測試指標分離）
-
-### 子任務 4A：Subagent 規格異議 (`Spec Objection`) 的 AST 自動防偽查核
-* **背景**：README 第 125~140 行定義了 Subagent 可提交 YAML 格式的 `Spec Objection`（例如宣稱 `evidence: "api/items.ts:L42 只提供 deleteMany(ids)"`）。
-* **實作位置**：在 `uia_coder/core/spec_verifier.py` 新增 `verify_objection(objection_dict: Dict, workspace_root: str) -> Dict`。
-* **邏輯**：
-  1. 解析 `objection["evidence"]` 中提及的檔案路徑與行號。
-  2. 直接用 `get_adapter_for_file()` 解析該證據檔案，列出該檔案實際存在的 `FUNCTION_DEF` 清單。
-  3. 附加在裁決報告中呈現給上位 Architect Agent（例如：`[AST 自動查證結果]: api/items.ts 確實不存在 deleteItem，在 L38~L55 發現 deleteMany(ids)`），徹底杜絕 Subagent 因偷懶而編造假證據欺騙上位 Agent。
-
-### 子任務 4B：基準測試腳本 (`tools/audit_*.py`) 指標去水分
-* **問題定位**：目前 `tools/audit_*.py` 中將 `modified_funcs > 0`（僅函式內文字有變動，但節點、邊、狀態皆無變動）一併計入 `is_captured`，導致無法區分「真正動到控制流/呼叫圖結構的變更」與「單純改動函式內部一行運算式的變更」。
-* **修改方式**：
-  在統計輸出中拆分為兩個明確指標：
-  1. **`Structural Graph Capture`（結構性因果變動）**：`added_edges > 0 or removed_edges > 0 or added_nodes > 0 or removed_nodes > 0 or transitions > 0`。
-  2. **`Body-Level Semantic Capture`（函式體實作變動）**：僅 `modified_funcs > 0`。
-  兩者相加為總體可執行變更捕獲率，讓報告兼具誠實度與學術嚴謹性。
-
----
-
-## ✅ 最終驗收標準 (Definition of Done / Verification Commands)
-
-另一台 Antigravity 完成上述修改後，必須確保以下測試全部通過（0 Error）：
-
-1. **既有回歸測試 100% 綠燈**：
-   ```powershell
-   python.exe -X utf8 tests/test_graph_engine.py
-   ```
-2. **新增單元測試 `tests/test_next_phase_features.py`**，必須涵蓋並通過以下 4 個測試案例：
-   * **Test A (同名函式不碰撞)**：同一檔案內兩個不同類別/閉包各自定義 `onClick()`，修改其中一個，驗證 `UIAGraphDiffer.diff_graphs` 能精準識別被修改的那一個，且不會覆蓋另一個。
-   * **Test B (條件守衛與 Early-Return 識別)**：比對「有寫 `if (!confirmed) return;` 再呼叫 `deleteRpc()`」與「沒寫 `if` 直接呼叫 `deleteRpc()`」，驗證前者的呼叫邊帶有 `is_conditional=True` (`guard_type="EARLY_RETURN_GUARD"`)，後者為 `False`。
-   * **Test C (`SpecVerifier` 容許 Helper 抽取)**：給定規格 `#btnDelete -> confirmModal -> deleteRpc`，實作代碼中間插入 `handleDelete()` 與 `validate()` 輔助函式，驗證 `SpecVerifier.verify()` 判定為 `🟢 PASS`；若拔掉 `deleteRpc` 的 `await` 或漏掉條件守衛，判定為 `🔴 FAIL`。
-   * **Test D (跨檔案 Import 接線與未 Export 攔截)**：`ui.tsx` 匯入 `api.ts` 的 `deleteItem()`，驗證 `WorkspaceGraphBuilder` 能跨檔連通前向切片；若將 `api.ts` 的 `export` 關鍵字拿掉，驗證引擎能抓出 `BLOCKED_SCOPE (Not Exported)`。
+## 📜 附錄：Phase 1 已完成項目留存紀錄 (Completed in Phase 1)
+- [x] **Phase 1 - Task 1**：新增 `uia_coder/core/spec_verifier.py` (`SpecVerifier` 路徑可達性與 LCA 拓樸偏序驗收)。
+- [x] **Phase 1 - Task 2A/2B**：`differ.py` `get_canonical_id()` 詞法作用域路徑防碰撞，以及 `base_adapter.py` `_inspect_control_context()` 條件分支與 Early-Return 守衛識別。
+- [x] **Phase 1 - Task 3**：新增 `uia_coder/core/workspace_graph.py` (`WorkspaceGraphBuilder` 跨檔 `import`/`export` 符號消解)。
+- [x] **Phase 1 - Task 4A/4B**：`verify_objection_evidence()` 異議防偽查核與 35 專案雙軌指標分離。
