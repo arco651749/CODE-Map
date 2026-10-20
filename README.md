@@ -2,7 +2,9 @@
 
 > **正式全稱**：**C**ausal **O**peration & **D**ependency **E**valuation **Map**（行為因果與接線依賴評估地圖引擎）  
 > **核心架構願景**：從 `AST (零件盤點)` ➔ `Call Graph (接線消解)` ➔ `CODE-Map 語意控制樹 (時空合一驗收)`  
-> **獨立自專案**：`d:\AntiGravity\Agent-Study`（會話 ID：`394096b1-bc18-40c1-8189-21c4f485bf2d`）
+> **獨立自專案**：`d:\AntiGravity\Agent-Study`（會話 ID：`394096b1-bc18-40c1-8189-21c4f485bf2d`）  
+> 
+> 📄 **權威技術白皮書**：[《為什麼軟體工程需要 CODE-Map？—— 十七大頂級開源專案、339 個真實修復 Commits 的實戰驗證與形式化因果圖論白皮書》](docs/why_code_map_matters_17_repos_whitepaper.md) (推薦必讀)
 
 ---
 
@@ -122,6 +124,8 @@ d:\AntiGravity\UIA_Coder\
 │   │   └── csharp_adapter.py        # 🎯 C# WPF/WinUI 事件綁定、CLI 與 Thread.Sleep 危害適配器
 │   ├── cli.py                       # 🚀 命令列介面邏輯實作
 │   └── __main__.py                  # 支援 python -m uia_coder 執行模組
+├── docs/                            # 📚 官方權威文檔與研究白皮書
+│   └── why_code_map_matters_17_repos_whitepaper.md # 🏆 十七大開源專案 339 Commits 形式化驗證白皮書
 ├── src/                             # 📄 多語言範例代碼 (JS/Python/Rust/Go/C#)
 │   ├── sample_rust_app.rs           # 🦀 Rust 範例程式 (包含 todo! 危害攔截示範)
 │   ├── sample_go_app.go             # 🐹 Go 範例程式 (包含 panic/time.Sleep 示範)
