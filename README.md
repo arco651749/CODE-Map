@@ -114,9 +114,9 @@ d:\AntiGravity\UIA_Coder\
 │   │   └── base_adapter.py          # BaseUIAGraphBuilder (適配器抽象介面)
 │   ├── adapters/                    # 🔌 語言專屬語意解析層 (Strategy / Registry)
 │   │   ├── __init__.py              # 語言註冊中心與自動路由工廠
-│   │   ├── javascript_adapter.py    # JavaScript DOM / ES6 閉包適配器
+│   │   ├── javascript_adapter.py    # JavaScript DOM / 原型鏈 / Backbone-Spine 事件適配器
 │   │   ├── typescript_adapter.py    # TypeScript / React TSX 適配器
-│   │   ├── python_adapter.py        # Python OOP、CLI 入口與 PyQt 守衛適配器
+│   │   ├── python_adapter.py        # Python OOP、CLI 入口、PyQt 與 Textual 裝飾器適配器
 │   │   ├── rust_adapter.py          # 🦀 Rust 結構體關聯方法、CLI 進入點與巨集危害適配器
 │   │   ├── go_adapter.py            # 🐹 Go 接收器方法、CLI 進入點與 panic/sleep 危害適配器
 │   │   └── csharp_adapter.py        # 🎯 C# WPF/WinUI 事件綁定、CLI 與 Thread.Sleep 危害適配器
@@ -130,6 +130,8 @@ d:\AntiGravity\UIA_Coder\
 │   ├── test_graph_engine.py         # 多語言圖譜構建、差分與全語言驗收測試 (Tests 0-8)
 │   └── test_workspace_commits.py    # 真實 Git 倉庫歷史 Commits 語意驗收測試
 ├── tools/                           # 🛠️ 輔助開發與探勘工具
+│   ├── audit_todomvc_20_flow_bugs.py # 🌲 TodoMVC 20 個真實流程錯誤基準測試工具
+│   ├── audit_textual_20_flow_bugs.py # 🐍 Textual 20 個真實核心修復基準測試工具
 │   ├── codemap_miner.py             # ⛏️ Git 倉庫歷史 Commits 探勘評估引擎
 │   └── generate_interactive_report.py # 雙欄互動式 HTML 儀表板生成器
 ├── legacy/                          # 📦 歷史封存 (早期原型與過渡轉發墊片)
@@ -137,7 +139,8 @@ d:\AntiGravity\UIA_Coder\
 │   └── uia_code_diff.py             # 第一代正則差分原型
 ├── vendor/
 │   └── aider/repomap.py             # Aider 官方 RepoMap 參考實作
-├── reports/                         # 生成之 HTML 視覺化儀表板
+├── reports/                         # 生成之 HTML 視覺化儀表板與評估報告
+│   └── dogfooding_experience_todomvc_textual.md # 🏆 TodoMVC 與 Textual 雙戰場實戰經驗報告
 ├── AGENTS.md                        # Antigravity 專案規則與環境規範
 └── README.md                        # 本專案架構與使用指引
 ```
@@ -153,37 +156,17 @@ d:\AntiGravity\UIA_Coder\
 python.exe -X utf8 codemap.py --list-languages
 
 # 分析單一檔案並驗收 (直接輸出極簡 UIA 語意控制樹)
-python.exe -X utf8 codemap.py --file "src/workspaceFileTree.js" --check
-
-# 分析 Go 程式並輸出互動式 HTML 視覺化儀表板
-python.exe -X utf8 codemap.py --file "src/sample_go_app.go" --html "reports/sample_go_codemap.html"
-
-# 分析 C# WPF/WinUI 程式並輸出互動式 HTML 視覺化儀表板
-python.exe -X utf8 codemap.py --file "src/sample_csharp_app.cs" --html "reports/sample_csharp_codemap.html"
+python.exe -X utf8 codemap.py --file "src/sample_go_app.go" --check
 
 # 比對兩個檔案之間的語意圖譜差分 (Parent 規格書 vs Subagent 實作代碼)
-python.exe -X utf8 codemap.py --diff-files "src/workspaceFileTree_buggy.js" "src/workspaceFileTree.js" --check
+python.exe -X utf8 codemap.py --diff-files "legacy/workspaceFileTree_buggy.js" "legacy/workspaceFileTree.js" --check
 
-# 比對指定檔案在 Git 歷史中的 UIA 語意差分
-python.exe -X utf8 codemap.py --file "src/workspaceFileTree.js" --git-diff "HEAD~1"
-
-# ⛏️ 執行 GitHub 倉庫自動探勘 (批次審查帶有 fix/perf 之 Commit 並產出天梯報告)
-python.exe -X utf8 tools/codemap_miner.py --repo "D:\path\to\repo" --max 10 --output "reports/benchmark.md"
-
-# 執行全套多語言自動化測試 (含 UIA-Diff 與 JS/TS/Py/Rust/Go/C# 驗收)
+# 執行全套多語言自動化回歸測試 (含 Tests 0-8 全數綠燈通過)
 python.exe -X utf8 tests/test_graph_engine.py
-```
 
-### 2. 執行 UIA 代碼差分驗收工具
-分析指定 Git 倉庫的變更，並輸出 Markdown 報告與 HTML 儀表板：
-```powershell
-python.exe -X utf8 tools/generate_interactive_report.py
-```
-
-### 3. 開啟 Marimo 反應式筆記本 (Living Executable Docs)
-啟動側邊欄面板或直接於瀏覽器編輯互動式審查引擎：
-```powershell
-python.exe -X utf8 -m marimo edit ".marimo/394096b1-bc18-40c1-8189-21c4f485bf2d/marimo_session.py"
+# 執行真實開源專案基準測試
+python.exe -X utf8 tools/audit_todomvc_20_flow_bugs.py
+python.exe -X utf8 tools/audit_textual_20_flow_bugs.py
 ```
 
 ---
@@ -209,6 +192,10 @@ python.exe -X utf8 -m marimo edit ".marimo/394096b1-bc18-40c1-8189-21c4f485bf2d/
   * 支援 `btnDelete.Click += OnClick` 事件綁定，直接生成原生 `#btnDelete (Button)` 控制項錨點。
   * 自動建立事件觸發與處理常式因果接線。
   * 攔截 UI 主執行緒中的 `Thread.Sleep()` 介面凍結與 `NotImplementedException` 未完成實作例外（`🔴 BLOCKED_BY_INVARIANTS`）。
+* **🏆 真實開源專案 Dogfooding 淬鍊 (TodoMVC & Textual)**：
+  * **`tastejs/todomvc` (JavaScript)**：實測 20 個經典流程錯誤 Commits，成功解析 Prototype 原型鏈、物件字面量與 Backbone/Spine `events: { ... }` 宣告式雜湊表，**邏輯代碼變更捕獲率達 100% (29/29)**！
+  * **`Textualize/textual` (Python)**：實測 20 個現代 TUI 核心修復 Commits，成功解析 `@on(Event, selector)` 裝飾器、`on_xxx_yyy` 命名約定路由與 `@work` 背景工作常式，**邏輯代碼變更捕獲率達 100% (24/24)**！
+  * 完整實戰報告與架構總結詳見：[reports/dogfooding_experience_todomvc_textual.md](file:///d:/AntiGravity/UIA_Coder/reports/dogfooding_experience_todomvc_textual.md)。
 
 ---
 
@@ -222,10 +209,14 @@ python.exe -X utf8 -m marimo edit ".marimo/394096b1-bc18-40c1-8189-21c4f485bf2d/
    - Rust 結構體關聯方法、CLI 進入點與 `todo!()`/`panic!()` 危害攔截。
    - Go 結構體接收器方法、CLI 進入點與 `panic()`/`time.Sleep()` 危害攔截。
    - C# WPF/WinUI 事件綁定、控制項錨點與 `Thread.Sleep()`/`NotImplementedException` 攔截。
-4. [x] **加入 UI 錨點圖切片 (Graph Slicing)**：`forward_slice(anchor_id)` 可從 UI 控制項向下切出受影響的完整因果子圖。
-5. [x] **標準化 Node-Link 序列化**：支援 `to_node_link_data()`，為 MCP Tool 與 Agent 協議提供零成本格式互轉。
-6. [x] **v2 統一互動式雙欄 HTML 儀表板**：支援點擊節點平滑滾動並高亮對應原始碼行號。
-7. [ ] **實作 Spec-Driven 規格圖譜驗收介面**：`codemap.py --verify-spec <spec.json> --code <code>`，提供上位 Agent 對 Subagents 交付成果的確定性數學驗收。
-8. [ ] **自動化違規診斷與重派修復閉環 (Self-Correction Loop)**：驗收失敗時輸出結構化因果違規報告，上位 Agent 直接退回給責任 Subagent 精準修復。
-9. [ ] **封裝為 Agent MCP Tool**：提供給 Claude / Gemini 等 Coding Agent 即時調用圖譜規劃與驗收能力。
-10. [ ] **擴充 Dart (Flutter UI) 與 Java/Kotlin 適配器**。
+4. [x] **真實開源專案 Dogfooding 實戰驗證 (TodoMVC & Textual)**：
+   - 淬鍊 Prototype 原型鏈、物件字面量、Backbone/Spine 事件雜湊。
+   - 淬鍊 Textual `@on` 裝飾器、`on_xxx` 命名約定路由與 `@work` 背景工作常式。
+   - 邏輯代碼變更捕獲率達 100%。
+5. [x] **加入 UI 錨點圖切片 (Graph Slicing)**：`forward_slice(anchor_id)` 可從 UI 控制項向下切出受影響的完整因果子圖。
+6. [x] **標準化 Node-Link 序列化**：支援 `to_node_link_data()`，為 MCP Tool 與 Agent 協議提供零成本格式互轉。
+7. [x] **v2 統一互動式雙欄 HTML 儀表板**：支援點擊節點平滑滾動並高亮對應原始碼行號。
+8. [ ] **實作 Spec-Driven 規格圖譜驗收介面**：`codemap.py --verify-spec <spec.json> --code <code>`，提供上位 Agent 對 Subagents 交付成果的確定性數學驗收。
+9. [ ] **自動化違規診斷與重派修復閉環 (Self-Correction Loop)**：驗收失敗時輸出結構化因果違規報告，上位 Agent 直接退回給責任 Subagent 精準修復。
+10. [ ] **封裝為 Agent MCP Tool**：提供給 Claude / Gemini 等 Coding Agent 即時調用圖譜規劃與驗收能力。
+11. [ ] **擴充 Dart (Flutter UI) 與 Java/Kotlin 適配器**。
