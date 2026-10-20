@@ -102,6 +102,43 @@ sequenceDiagram
    * 所有 Subagents 完成代碼後，上位 Agent 調用 CODE-Map 編譯器將聚合源碼抽取為 `Actual CODE-Map`。
    * 透過 `UIAGraphDiffer` 進行純數學比對。若不符規格或觸發守衛紅牌，上位 Agent **不需要人工介入，直接帶著圖譜違規點將任務退回給責任 Subagent 重新修正**，直到全綠燈放行！
 
+### 🗣️ Subagent 異議機制：規格可被挑戰 (Spec Negotiation)
+
+> **規格圖譜是契約，但不是聖旨。** 前期設計必然存在想錯之處，往往要到實作時才會暴露（瀑布式開發的老教訓）。若閉環只允許「上位 Agent 單向退件」，Subagent 只能硬湊代碼去迎合一份錯誤的規格，最終產出「圖譜全綠、功能錯誤」的結果。
+
+因此閉環必須是**雙向**的：Subagent 除了「實作」與「被退件」之外，還擁有第三種合法回應——**提出規格異議 (Spec Objection)**。
+
+```mermaid
+flowchart TD
+    Spec["📐 Spec CODE-Map"] --> Worker["🛠️ Subagent 實作"]
+    Worker -->|"可行"| Submit["提交代碼"]
+    Worker -->|"發現規格不可行 / 有更佳設計"| Objection["🗣️ 提出 Spec Objection<br/>(違反之節點/邊 + 理由 + 替代方案)"]
+    Submit --> Differ["⚖️ UIAGraphDiffer 驗收"]
+    Differ -->|"🔴 BLOCKED"| Worker
+    Differ -->|"🟢 READY_TO_SHIP"| Ship["合入主幹"]
+    Objection --> Boss{"👑 上位架構 Agent 裁決"}
+    Boss -->|"採納"| Revise["修訂 Spec 圖譜 (版本 +1)<br/>並通知受影響之 Subagents"]
+    Boss -->|"駁回 (附理由)"| Worker
+    Revise --> Spec
+```
+
+**異議報告的最低格式**（結構化，避免淪為模糊的「做不到」）：
+
+```yaml
+objection:
+  spec_version: 3
+  target: "edge: confirmModal.onConfirm -> deleteItem"   # 受質疑的節點或邊
+  reason: "後端刪除為批次 API，逐筆呼叫會造成 N 次請求與部分失敗不一致"
+  evidence: "api/items.ts:L42 只提供 deleteMany(ids)"
+  proposal: "改為 confirmModal.onConfirm -> deleteItems(ids) -> api.deleteMany"
+  impact: ["#btnDelete", "#btnBulkDelete"]                 # 受影響之 UI 錨點
+```
+
+**裁決原則：**
+1. **上位 Agent 保有最終決定權**，但駁回必須附理由，避免 Subagent 無限重試同一錯誤方向。
+2. **規格修訂需版本化**：每次採納異議即遞增 `spec_version`，並對受影響錨點之所有 Subagents 廣播，防止各自依據不同版本實作。
+3. **異議與退件分開計數**：同一節點反覆出現異議，代表規格設計本身有問題，應升級為人類架構師審查。
+
 ---
 
 ## 📂 專案結構與遷移資產
@@ -285,5 +322,6 @@ python.exe -X utf8 tools/audit_textual_20_flow_bugs.py
 7. [x] **v2 統一互動式雙欄 HTML 儀表板**：支援點擊節點平滑滾動並高亮對應原始碼行號。
 8. [ ] **實作 Spec-Driven 規格圖譜驗收介面**：`codemap.py --verify-spec <spec.json> --code <code>`，提供上位 Agent 對 Subagents 交付成果的確定性數學驗收。
 9. [ ] **自動化違規診斷與重派修復閉環 (Self-Correction Loop)**：驗收失敗時輸出結構化因果違規報告，上位 Agent 直接退回給責任 Subagent 精準修復。
+9.5. [ ] **Subagent 規格異議機制 (Spec Negotiation)**：支援結構化 Spec Objection 回報、上位 Agent 裁決、規格圖譜版本化與受影響 Subagents 廣播。
 10. [ ] **封裝為 Agent MCP Tool**：提供給 Claude / Gemini 等 Coding Agent 即時調用圖譜規劃與驗收能力。
 11. [ ] **擴充 Dart (Flutter UI) 與 Java/Kotlin 適配器**。
