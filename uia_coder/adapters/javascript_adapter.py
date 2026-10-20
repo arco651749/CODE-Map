@@ -518,8 +518,32 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             h_line = handler_arg.start_point[0] + 1
             h_col = handler_arg.start_point[1] + 1
             arrow_scope_id = f"scope:arrow@{file_path}:L{h_line}C{h_col}"
+            anon_func_id = f"func:{obj_name}.on('{event_name}')_handler@{file_path}:L{h_line}"
             if arrow_scope_id in scopes:
-                scopes[arrow_scope_id]["func_node_id"] = event_node_id
+                scopes[arrow_scope_id]["func_node_id"] = anon_func_id
+
+            if anon_func_id not in graph.g:
+                graph.add_node_rich(
+                    node_id=anon_func_id,
+                    label=f"on('{event_name}')_handler",
+                    category="FUNCTION_DEF",
+                    scope={"scope_id": arrow_scope_id, "file": file_path, "line": h_line},
+                    props={
+                        "is_async": False,
+                        "signature": f"function(event)",
+                        "line_start": h_line,
+                        "line_end": handler_arg.end_point[0] + 1,
+                        "source_code": handler_arg.text.decode("utf-8"),
+                    }
+                )
+                graph.add_edge_rich(
+                    source=event_node_id,
+                    target=anon_func_id,
+                    edge_type="TRIGGERS",
+                    flow_type="SYNC",
+                    status="VALID",
+                    detail=f"觸發匿名 {event_name} 處理常式"
+                )
 
     def _resolve_call_site(
         self,
