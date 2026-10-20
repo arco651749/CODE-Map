@@ -198,13 +198,18 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
             start_line = node.start_point[0] + 1
             next_scope_id = f"scope:{class_name}@{file_path}:L{start_line}"
 
-        elif node.type == "function_definition":
-            name_node = node.child_by_field_name("name")
-            func_name = name_node.text.decode("utf-8") if name_node else "anonymous"
-            start_line = node.start_point[0] + 1
-            cls_name = scopes.get(current_scope_id, {}).get("class_name")
-            full_label = f"{cls_name}.{func_name}" if cls_name else func_name
-            next_scope_id = f"scope:{full_label}@{file_path}:L{start_line}"
+        elif node.type in ("function_definition", "decorated_definition"):
+            func_node = node if node.type == "function_definition" else node.child_by_field_name("definition")
+            if func_node and func_node.type == "function_definition":
+                name_node = func_node.child_by_field_name("name")
+                func_name = name_node.text.decode("utf-8") if name_node else "anonymous"
+                start_line = func_node.start_point[0] + 1
+                cls_name = scopes.get(current_scope_id, {}).get("class_name")
+                full_label = f"{cls_name}.{func_name}" if cls_name else func_name
+                next_scope_id = f"scope:{full_label}@{file_path}:L{start_line}"
+                
+                # 支援 Textual @on(...) 裝飾器與 on_xxx_yyy 事件約定
+                self._handle_textual_event_bindings(node, func_name, full_label, next_scope_id, scopes, file_path, graph)
 
         # 1. 偵測 Python UI 控制項賦值 (嚴格要求右側為呼叫表達式，且調用 GUI 類別)
         if node.type == "assignment":
@@ -299,6 +304,111 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
 
         for child in node.children:
             self._wire_ui_and_calls(child, next_scope_id, scopes, code, file_path, graph)
+
+    def _handle_textual_event_bindings(
+        self,
+        node: Node,
+        func_name: str,
+        full_label: str,
+        scope_id: str,
+        scopes: Dict[str, Dict[str, Any]],
+        file_path: str,
+        graph: UIACodeGraph,
+    ):
+        """解析 Textual 的 @on(...) 裝飾器與 on_button_pressed 等約定事件處理常式"""
+        line = node.start_point[0] + 1
+        ctrl_name = None
+        event_name = None
+        
+        # 1. 檢查裝飾器: @on(Button.Pressed, "#btn_id") 或 @work
+        if node.type == "decorated_definition":
+            for child in node.children:
+                if child.type == "decorator":
+                    dec_text = child.text.decode("utf-8")
+                    if "@on" in dec_text:
+                        # 嘗試抽取 selector 與 event
+                        call_node = None
+                        for c in child.children:
+                            if c.type == "call":
+                                call_node = c
+                                break
+                        if call_node:
+                            args_node = call_node.child_by_field_name("arguments")
+                            if args_node:
+                                for arg in args_node.children:
+                                    arg_str = arg.text.decode("utf-8").strip("'\"")
+                                    if arg_str.startswith("#") or arg_str.startswith("."):
+                                        ctrl_name = arg_str.lstrip("#.")
+                                    elif "Pressed" in arg_str or "Click" in arg_str or "Key" in arg_str or "Changed" in arg_str or "Selected" in arg_str:
+                                        event_name = arg_str.split(".")[-1]
+                    elif "@work" in dec_text:
+                        # 標註該方法為非同步背景 Worker
+                        func_nid = f"func:{full_label}@{file_path}:L{line}"
+                        if func_nid in graph.g:
+                            graph.g.nodes[func_nid]["props"]["is_worker"] = True
+
+        # 2. 檢查命名約定: on_button_pressed, on_key, on_mount, on_click
+        if not event_name and func_name.startswith("on_"):
+            parts = func_name.split("_")
+            if len(parts) >= 3:
+                # 例如 on_button_pressed -> ctrl=button, event=pressed
+                ctrl_name = ctrl_name or parts[1]
+                event_name = "_".join(parts[2:])
+            elif len(parts) == 2:
+                # 例如 on_key, on_mount
+                ctrl_name = ctrl_name or "app"
+                event_name = parts[1]
+
+        if event_name:
+            clean_ctrl = ctrl_name or "control"
+            ctrl_id = f"ctrl:{clean_ctrl}@{file_path}:L{line}"
+            existing_ctrl = None
+            clean_label = f"#{clean_ctrl}"
+            
+            for n, d in graph.g.nodes(data=True):
+                if d.get("category") == "UI_CONTROL" and d.get("label") == clean_label:
+                    existing_ctrl = n
+                    break
+                    
+            if not existing_ctrl:
+                graph.add_node_rich(
+                    node_id=ctrl_id,
+                    label=clean_label,
+                    category="UI_CONTROL",
+                    scope={"scope_id": scope_id, "file": file_path, "line": line},
+                    props={"ui_type": "Button" if "button" in clean_ctrl.lower() or "btn" in clean_ctrl.lower() else "Widget"}
+                )
+                active_ctrl = ctrl_id
+            else:
+                active_ctrl = existing_ctrl
+                
+            event_nid = f"event:{clean_ctrl}.{event_name}@{file_path}:L{line}"
+            graph.add_node_rich(
+                node_id=event_nid,
+                label=f"on('{event_name}')",
+                category="EVENT_BINDING",
+                scope={"scope_id": scope_id, "file": file_path, "line": line},
+                props={"event_name": event_name}
+            )
+            graph.add_edge_rich(
+                source=active_ctrl,
+                target=event_nid,
+                edge_type="WIRES_TO",
+                flow_type="SYNC",
+                status="VALID",
+                detail="Textual 事件綁定"
+            )
+            # 接線至處理方法
+            func_nid = f"func:{full_label}@{file_path}:L{line}"
+            if func_nid in graph.g:
+                graph.add_edge_rich(
+                    source=event_nid,
+                    target=func_nid,
+                    edge_type="TRIGGERS",
+                    flow_type="SYNC",
+                    status="VALID",
+                    detail="Textual 事件處理常式"
+                )
 
     def _handle_pyqt_connect(
         self,
