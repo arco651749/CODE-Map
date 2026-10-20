@@ -45,6 +45,63 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         self._wire_ui_and_calls(tree.root_node, "scope:global", scopes, source_code, file_path, graph)
         return graph
 
+    def _infer_function_name(self, node: Node) -> Optional[str]:
+        parent = node.parent
+        if not parent:
+            return None
+
+        # 1. const foo = () => {} 或 let foo = function() {}
+        if parent.type == "variable_declarator":
+            name_node = parent.child_by_field_name("name")
+            if name_node:
+                return name_node.text.decode("utf-8")
+
+        # 2. foo = () => {} 或 this.foo = () => {}
+        if parent.type == "assignment_expression":
+            left = parent.child_by_field_name("left")
+            if left:
+                if left.type == "identifier":
+                    return left.text.decode("utf-8")
+                elif left.type == "member_expression":
+                    prop = left.child_by_field_name("property")
+                    if prop:
+                        return prop.text.decode("utf-8")
+
+        # 3. { foo: () => {} }
+        if parent.type == "pair":
+            key = parent.child_by_field_name("key")
+            if key:
+                return key.text.decode("utf-8").strip("'\"")
+
+        # 4. React HOCs 或包裝器調用:
+        #    const Box = forwardRef((props, ref) => ...)
+        #    const Box = memo(...)
+        #    const Box = React.forwardRef(...)
+        #    directive('model', (el, ...) => ...)
+        if parent.type == "arguments" and parent.parent and parent.parent.type == "call_expression":
+            call_expr = parent.parent
+            fn = call_expr.child_by_field_name("function")
+            fn_name = fn.text.decode("utf-8") if fn else ""
+
+            if call_expr.parent and call_expr.parent.type == "variable_declarator":
+                var_name = call_expr.parent.child_by_field_name("name")
+                if var_name:
+                    return var_name.text.decode("utf-8")
+
+            if call_expr.parent and call_expr.parent.type == "assignment_expression":
+                left = call_expr.parent.child_by_field_name("left")
+                if left and left.type == "identifier":
+                    return left.text.decode("utf-8")
+
+            if any(kw in fn_name for kw in ("directive", "magic", "plugin")):
+                for a in parent.children:
+                    if a.type in ("string", "string_fragment", "string_literal"):
+                        clean = a.text.decode("utf-8").strip("'\"`")
+                        if clean:
+                            return f"directive:{clean}"
+
+        return None
+
     def _collect_scopes_and_functions(
         self,
         node: Node,
@@ -112,16 +169,66 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         elif node.type in ("arrow_function", "function_expression"):
             start_line = node.start_point[0] + 1
             start_col = node.start_point[1] + 1
-            new_scope_id = f"scope:arrow@{file_path}:L{start_line}C{start_col}"
-            depth = scopes[current_scope_id]["depth"] + 1
-            scopes[new_scope_id] = {
-                "id": new_scope_id,
-                "parent": current_scope_id,
-                "depth": depth,
-                "defs": {},
-                "func_node_id": scopes.get(current_scope_id, {}).get("func_node_id"),
-            }
-            next_scope_id = new_scope_id
+            inferred_name = self._infer_function_name(node)
+
+            if inferred_name:
+                new_scope_id = f"scope:{inferred_name}@{file_path}:L{start_line}C{start_col}"
+                func_node_id = f"func:{inferred_name}@{file_path}:L{start_line}C{start_col}"
+                depth = scopes[current_scope_id]["depth"] + 1
+
+                scopes[new_scope_id] = {
+                    "id": new_scope_id,
+                    "parent": current_scope_id,
+                    "depth": depth,
+                    "defs": {},
+                    "func_node_id": func_node_id,
+                }
+
+                is_async = (b"async" in node.children[0].text if node.children else False)
+                params_node = node.child_by_field_name("parameters")
+                param_text = params_node.text.decode("utf-8") if params_node else "()"
+                full_text = node.text.decode("utf-8")
+                sig_text = f"{inferred_name}{param_text}"
+                end_line = node.end_point[0] + 1
+
+                scopes[current_scope_id]["defs"][inferred_name] = {
+                    "node_id": func_node_id,
+                    "declared_scope": current_scope_id,
+                    "inner_scope": new_scope_id,
+                    "line": start_line,
+                    "is_async": is_async,
+                    "signature": sig_text,
+                    "parameters": param_text,
+                }
+
+                graph.add_node_rich(
+                    node_id=func_node_id,
+                    label=inferred_name,
+                    category="FUNCTION_DEF",
+                    scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line},
+                    props={
+                        "is_async": is_async,
+                        "inner_scope": new_scope_id,
+                        "signature": sig_text,
+                        "parameters": param_text,
+                        "line_start": start_line,
+                        "line_end": end_line,
+                        "line_count": end_line - start_line + 1,
+                        "source_code": full_text,
+                    }
+                )
+                next_scope_id = new_scope_id
+            else:
+                new_scope_id = f"scope:arrow@{file_path}:L{start_line}C{start_col}"
+                depth = scopes[current_scope_id]["depth"] + 1
+                scopes[new_scope_id] = {
+                    "id": new_scope_id,
+                    "parent": current_scope_id,
+                    "depth": depth,
+                    "defs": {},
+                    "func_node_id": scopes.get(current_scope_id, {}).get("func_node_id"),
+                }
+                next_scope_id = new_scope_id
 
         elif node.type == "assignment_expression":
             left = node.child_by_field_name("left")
@@ -260,10 +367,22 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
             start_line = node.start_point[0] + 1
             start_col = node.start_point[1] + 1
             next_scope_id = f"scope:{func_name}@{file_path}:L{start_line}C{start_col}"
+        elif node.type in ("method_definition", "pair"):
+            key_node = node.child_by_field_name("name") or node.child_by_field_name("key")
+            if key_node:
+                method_name = key_node.text.decode("utf-8").strip("'\"")
+                target_node = node.child_by_field_name("value") or node
+                start_line = target_node.start_point[0] + 1
+                start_col = target_node.start_point[1] + 1
+                next_scope_id = f"scope:{method_name}@{file_path}:L{start_line}C{start_col}"
         elif node.type in ("arrow_function", "function_expression"):
             start_line = node.start_point[0] + 1
             start_col = node.start_point[1] + 1
-            next_scope_id = f"scope:arrow@{file_path}:L{start_line}C{start_col}"
+            inferred_name = self._infer_function_name(node)
+            if inferred_name:
+                next_scope_id = f"scope:{inferred_name}@{file_path}:L{start_line}C{start_col}"
+            else:
+                next_scope_id = f"scope:arrow@{file_path}:L{start_line}C{start_col}"
 
         # 1. 偵測 React TSX JSX 元素: <button onClick={handleDelete}>
         if node.type == "jsx_element" or node.type == "jsx_self_closing_element":

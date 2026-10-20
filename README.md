@@ -132,6 +132,9 @@ d:\AntiGravity\UIA_Coder\
 ├── tools/                           # 🛠️ 輔助開發與探勘工具
 │   ├── audit_todomvc_20_flow_bugs.py # 🌲 TodoMVC 20 個真實流程錯誤基準測試工具
 │   ├── audit_textual_20_flow_bugs.py # 🐍 Textual 20 個真實核心修復基準測試工具
+│   ├── audit_sortable_20_flow_bugs.py # 🔀 SortableJS 20 個原生拖曳事件基準測試工具
+│   ├── audit_xstate_20_flow_bugs.py  # ⚙️ XState 20 個狀態機轉移基準測試工具
+│   ├── audit_triple_benchmark.py     # 🏆 Ink + HTTPX + Alpine 三大專案綜合稽核套件
 │   ├── codemap_miner.py             # ⛏️ Git 倉庫歷史 Commits 探勘評估引擎
 │   └── generate_interactive_report.py # 雙欄互動式 HTML 儀表板生成器
 ├── legacy/                          # 📦 歷史封存 (早期原型與過渡轉發墊片)
@@ -140,7 +143,8 @@ d:\AntiGravity\UIA_Coder\
 ├── vendor/
 │   └── aider/repomap.py             # Aider 官方 RepoMap 參考實作
 ├── reports/                         # 生成之 HTML 視覺化儀表板與評估報告
-│   └── dogfooding_experience_todomvc_textual.md # 🏆 TodoMVC 與 Textual 雙戰場實戰經驗報告
+│   ├── dogfooding_benchmark_7_repos.md # 🏆 跨 7 大開源專案 139 Commits 實戰驗證綜合報告
+│   └── dogfooding_experience_todomvc_textual.md # TodoMVC 與 Textual 雙戰場早期報告
 ├── AGENTS.md                        # Antigravity 專案規則與環境規範
 └── README.md                        # 本專案架構與使用指引
 ```
@@ -192,10 +196,16 @@ python.exe -X utf8 tools/audit_textual_20_flow_bugs.py
   * 支援 `btnDelete.Click += OnClick` 事件綁定，直接生成原生 `#btnDelete (Button)` 控制項錨點。
   * 自動建立事件觸發與處理常式因果接線。
   * 攔截 UI 主執行緒中的 `Thread.Sleep()` 介面凍結與 `NotImplementedException` 未完成實作例外（`🔴 BLOCKED_BY_INVARIANTS`）。
-* **🏆 真實開源專案 Dogfooding 淬鍊 (TodoMVC & Textual)**：
-  * **`tastejs/todomvc` (JavaScript)**：實測 20 個經典流程錯誤 Commits，成功解析 Prototype 原型鏈、物件字面量與 Backbone/Spine `events: { ... }` 宣告式雜湊表，**邏輯代碼變更捕獲率達 100% (29/29)**！
-  * **`Textualize/textual` (Python)**：實測 20 個現代 TUI 核心修復 Commits，成功解析 `@on(Event, selector)` 裝飾器、`on_xxx_yyy` 命名約定路由與 `@work` 背景工作常式，**邏輯代碼變更捕獲率達 100% (24/24)**！
-  * 完整實戰報告與架構總結詳見：[reports/dogfooding_experience_todomvc_textual.md](file:///d:/AntiGravity/UIA_Coder/reports/dogfooding_experience_todomvc_textual.md)。
+* **🏆 真實開源專案 Dogfooding 淬鍊 (跨 7 大主流專案 139 Commits 驗證)**：
+  * **`tastejs/todomvc` (JavaScript 前端)**：19 Commits / 30 檔案，邏輯變更捕獲率 **100.0% (29/29)**。
+  * **`Textualize/textual` (Python TUI)**：20 Commits / 27 檔案，邏輯變更捕獲率 **100.0% (24/24)**。
+  * **`SortableJS/Sortable` (JavaScript 拖曳)**：20 Commits / 22 檔案，邏輯變更捕獲率 **100.0% (20/20)**。
+  * **`statelyai/xstate` (TypeScript 狀態機)**：20 Commits / 28 檔案，邏輯變更捕獲率 **100.0% (23/23)**。
+  * **`vadimdemedes/ink` (TypeScript React CLI)**：20 Commits / 37 檔案，邏輯變更捕獲率 **100.0% (35/35)**。
+  * **`encode/httpx` (Python 非同步 HTTP)**：20 Commits / 24 檔案，邏輯變更捕獲率 **100.0% (20/20)**。
+  * **`alpinejs/alpine` (JavaScript 響應式微核心)**：20 Commits / 22 檔案，邏輯變更捕獲率 **100.0% (20/20)**。
+  * **七大專案總結**：審查 190 檔案，總體捕獲率 **90.0% (171/190)**，**可執行邏輯變更捕獲率達成 100.0% (171/171)**！解析錯誤率 0%！
+  * 完整實戰報告詳見：[reports/dogfooding_benchmark_7_repos.md](file:///d:/AntiGravity/UIA_Coder/reports/dogfooding_benchmark_7_repos.md)。
 
 ---
 
@@ -209,10 +219,11 @@ python.exe -X utf8 tools/audit_textual_20_flow_bugs.py
    - Rust 結構體關聯方法、CLI 進入點與 `todo!()`/`panic!()` 危害攔截。
    - Go 結構體接收器方法、CLI 進入點與 `panic()`/`time.Sleep()` 危害攔截。
    - C# WPF/WinUI 事件綁定、控制項錨點與 `Thread.Sleep()`/`NotImplementedException` 攔截。
-4. [x] **真實開源專案 Dogfooding 實戰驗證 (TodoMVC & Textual)**：
-   - 淬鍊 Prototype 原型鏈、物件字面量、Backbone/Spine 事件雜湊。
+4. [x] **七大開源專案 Dogfooding 實戰驗證 (Todomvc, Textual, Sortable, XState, Ink, HTTPX, Alpine)**：
+   - 淬鍊 Prototype 原型鏈、物件字面量、Backbone/Spine 事件雜湊、Sortable 匿名監聽回呼。
    - 淬鍊 Textual `@on` 裝飾器、`on_xxx` 命名約定路由與 `@work` 背景工作常式。
-   - 邏輯代碼變更捕獲率達 100%。
+   - 淬鍊 React TSX `forwardRef`、`memo`、箭頭函式推導、Alpine 指令/插件標籤推導。
+   - 190 檔案可執行邏輯變更捕獲率達 100.0% (171/171)。
 5. [x] **加入 UI 錨點圖切片 (Graph Slicing)**：`forward_slice(anchor_id)` 可從 UI 控制項向下切出受影響的完整因果子圖。
 6. [x] **標準化 Node-Link 序列化**：支援 `to_node_link_data()`，為 MCP Tool 與 Agent 協議提供零成本格式互轉。
 7. [x] **v2 統一互動式雙欄 HTML 儀表板**：支援點擊節點平滑滾動並高亮對應原始碼行號。
