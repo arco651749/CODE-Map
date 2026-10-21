@@ -39,3 +39,22 @@
 - **Surface Auxiliary Panel Link**: After creating, modifying, or fixing any tool in Marimo, always provide the user with the direct sidecar navigation pill: `[開啟 Marimo 筆記本](sidecar://antigravity-marimo/panel/)`.
 - **Standalone Export Support**: Ensure tools remain decoupled from UI so they can be exported to standalone production scripts via `marimo export script` on demand.
 
+
+
+# CODE-Map Spec-Driven Development & Anti-Thrashing Protocol
+
+- **Two-Tier Spec First (雙層規約先行)**:
+  - 在動工撰寫或修改業務代碼前，上位架構 Agent 必須先以 **CODE-Map 目標因果圖譜 (Target Graph)** 明確定義節點拓撲（`TRIGGERS`, `DISPATCHES`, `GROUNDS_TO`）。
+  - 所有動作與流程節點（`ACTION`, `HANDLER`, `ROUTER`）必須在 `spec` 內嵌**結構化虛擬碼 (Algorithmic Pseudo-Code)**、前後置條件（Pre/Post-conditions）以及**分支到邊的嚴格映射（Branch-to-Edge Mapping）**，嚴禁指派無演算法骨架的模糊任務。
+- **Surgical Node-Level Patching (嚴禁全量重寫，強制節點級微創打補丁)**:
+  - 嚴禁因為修改 10~20 行局部邏輯而全量重寫輸出數百或數千行的原始碼檔案。
+  - 所有代碼變更必須限定在目標節點（函式、類別、方法）邊界內進行外科手術式局部修補（`edit_file`），最大化保留上下文穩定性，避免注意力衰減引發回歸錯誤。
+- **Zero Agent Thrashing (杜絕盲目重複顛簸死循環)**:
+  - 嚴格禁止陷入「讀取全檔 ➔ 猜測修改 ➔ 再次全檔讀取 ➔ 再次修改」的無窮顛簸迴圈 (Agent Thrashing)。
+  - 代碼修改後，必須立即執行確定性驗證指令（如 `pytest`、`python.exe codemap.py verify` 或 CDP 狀態檢查），以二元形式化結果（PASS / FAIL）作為唯一決策依據。
+  - 若驗證通過，**立即終止任務回合並回報結果**，禁止出於「不放心」而重複讀取全檔。
+  - 若驗證失敗，僅針對反例報告（Counterexample）中指出的具體斷鏈邊進行靶向排查，嚴禁發散性泛讀。
+- **Topological Invariant Guardrails (拓撲不變量守衛)**:
+  - 任何新增功能必須通過可達性證明：嚴禁入度為 0 的孤立節點（`NO_UNTRIGGERED_ACTION`）。
+  - 嚴禁所有調用目標指向不存在符號的懸空引用（`NO_DANGLING_GROUNDING`）。
+  - 嚴禁將事件處理器或外部依賴函式囚禁於無法導出的內部閉包中（`NO_BLOCKED_SCOPE`）。
