@@ -151,6 +151,44 @@ objection:
 2. **規格修訂需版本化**：每次採納異議即遞增 `spec_version`，並對受影響錨點之所有 Subagents 廣播，防止各自依據不同版本實作。
 3. **異議與退件分開計數**：同一節點反覆出現異議，代表規格設計本身有問題，應升級為人類架構師審查。
 
+### 🛡️ 反顛簸協定與微創手術式補丁 (Anti-Thrashing Protocol & Surgical Patching)
+
+> **終結「讀 ➔ 改 ➔ 再讀 ➔ 再改」的盲目顛簸迴圈 (Agent Thrashing)**。
+
+在多 Agent 協同開發中，最消耗 Token 且讓工程師心慌的現象是：Agent 遇到問題動輒全量重讀千行代碼，再慢吞吞全量重吐輸出整個檔案。長文本輸出不僅浪費數分鐘，更會因模型注意力衰減將原本正常的邏輯改壞（回歸錯誤）。
+
+CODE-Map 透過形式化圖譜與因果驗收器，強制推行四大反顛簸工程規範：
+
+```mermaid
+flowchart LR
+    subgraph Bad["❌ 傳統 Agent 盲目顛簸 (Agent Thrashing)"]
+        direction TB
+        B1["讀取 1000 行全檔"] --> B2["猜測修改某處"]
+        B2 --> B3["全量重寫整檔 (慢速串流)"]
+        B3 --> B4["缺乏信心，再次全檔重讀"]
+        B4 --> B1
+    end
+
+    subgraph Good["✅ CODE-Map 微創收斂 (Surgical and Single-Step)"]
+        direction TB
+        G1["CODE-Map 鎖定斷鏈邊"] --> G2["微創打補丁 (只改 15 行節點)"]
+        G2 --> G3["執行形式化驗收 (PASS/FAIL)"]
+        G3 --> G4["🟢 驗證通過：立即終止並交付<br/>🔴 驗證失敗：僅針對斷針邊精修"]
+    end
+```
+
+1. **Surgical Node-Level Patching (嚴禁全量重寫，強制節點級微創打補丁)**：
+   - 嚴禁因為修改 10~20 行局部邏輯而全量重寫輸出數百或數千行的原始碼檔案。
+   - 所有代碼變更必須限定在目標節點（函式、類別、方法）邊界內進行局部修補（`edit_file`），輸出 Token 數減少 95%，修改時間從 120 秒降至 3 秒，最大化保留上下文穩定性。
+2. **Deterministic Stopping Condition (以形式化驗收作為唯一終止信號)**：
+   - 代碼修改後，必須立即執行確定性驗證指令（如 `pytest`、`python.exe codemap.py verify` 或 CDP 狀態檢查），以二元形式化結果（`PASS` / `FAIL`）作為唯一決策依據。
+   - **若驗證通過，立即終止任務回合並回報結果**，嚴禁出於「不放心」而重複讀取全檔。
+   - **若驗證失敗，僅針對反例報告（Counterexample）中指出的具體斷鏈邊進行靶向排查**，嚴禁發散性泛讀。
+3. **Topological Invariant Guardrails (拓撲不變量守衛檢核)**：
+   - **入度防呆 (`NO_UNTRIGGERED_ACTION`)**：任何新增功能必須通過可達性證明，嚴禁入度為 0 的孤立節點（杜絕「功能寫了卻未被觸發」）。
+   - **引用防呆 (`NO_DANGLING_GROUNDING`)**：嚴禁所有調用目標指向不存在符號的懸空引用。
+   - **作用域防呆 (`NO_BLOCKED_SCOPE`)**：嚴禁將事件處理器或外部依賴函式囚禁於無法導出的內部閉包中。
+
 ---
 
 ## 📂 專案結構與遷移資產
