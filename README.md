@@ -1,163 +1,115 @@
 # 🌲 CODE-Map: Causal Operation & Dependency Evaluation Map
 
 > **正式全稱**：**C**ausal **O**peration & **D**ependency **E**valuation **Map**（行為因果與接線依賴評估地圖引擎）  
-> **核心架構願景**：從 `AST (零件盤點)` ➔ `Call Graph (接線消解)` ➔ `CODE-Map 語意控制樹 (時空合一驗收)`  
-> **獨立自專案**：`d:\AntiGravity\Agent-Study`（會話 ID：`394096b1-bc18-40c1-8189-21c4f485bf2d`）  
-> 
-> 📄 **權威技術白皮書**：[《為什麼軟體工程需要 CODE-Map？—— 三十五項頂級開源專案、699 個真實修復 Commits 的實戰驗證與形式化因果圖論白皮書》](docs/why_code_map_matters_35_repos_whitepaper.md) (推薦必讀)
+> **核心定位**：AI Agent 與現代軟體工程的**「數位三用電表」與「形式化語意編譯器」**  
+> **架構演進**：從 `AST (零件盤點)` ➔ `Call / DOM Graph (跨檔接線消解)` ➔ `CODE-Map 語意控制樹 (時空合一驗收)`  
+>
+> 📄 **權威技術白皮書**：[《為什麼軟體工程需要 CODE-Map？—— 三十五項頂級開源專案、699 個真實修復 Commits 的實戰驗證與形式化因果圖論白皮書》](docs/why_code_map_matters_35_repos_whitepaper.md)  
+> 📘 **規格規劃指引**：[《CODE-Map 形式化規格規劃與 Subagent 派發指引：以微觀虛擬碼與宏觀因果圖譜建構雙層合約》](docs/SPEC_DRIVEN_PLANNING_GUIDE.md)
 
 ---
 
-## 🎯 為什麼需要 CODE-Map？
+## 🎯 第一章：為什麼需要 CODE-Map？（「函式無罪，流程要命」）
 
-在現代 UI 與互動式軟體開發中，傳統的代碼分析工具存在致命盲區：
-1. **純 AST 只認語法，不識接線**：看得到按鈕、看得到函式，但兩者中間到底有沒有通電，AST 完全瞎子摸象。
-2. **表面正則匹配給出虛假安全感**：只要代碼裡寫了 `.addEventListener` 就以為接線成功，卻看不出目標函式被深鎖在兄弟閉包內部（執行期直接拋出 `ReferenceError`）。
-3. **傳統 Git Diff 缺乏語意**：只告訴你第 860 行加了什麼，看不出這次提交是否破壞了「空間上的控制項樹」或「時間上的非同步因果鏈」。
+在現代 UI 與互動式軟體開發（特別是 AI Agent 協同開發）中，**絕大多數棘手的 Bug 都不是「單一函式演算法寫錯」，而是「跨時空的流程與接線斷裂」**。傳統工具與開發模式存在三大致命盲區：
 
-**CODE-Map** 借鑒 Windows UI Automation (UIA) 的層級理念與 Aider 的 `repomap.py` 模式，將代碼變更投影為**「以 UI 控制項為錨點的語意控制樹」**，在發布前自動進行接線驗收與形式化守衛。
+1. **純 AST 只認語法零件，不識電路通電**：
+   - 看得到按鈕（DOM）、看得到處理函式（Handler），但兩者之間到底有沒有綁定事件、目標函式是否被深鎖在無法觸及的內部閉包（執行期拋出 `ReferenceError`）、或者父層容器是否被 `hidden` / `display: none` 遮蔽（`BLOCKED_VISIBILITY`），純語法樹完全瞎子摸象。
+2. **傳統 Git Diff 缺乏時空因果語意**：
+   - 傳統 Diff 只告訴你「第 860 行新增了什麼字元」，卻看不出這次提交是否創造了**入度為 0 的孤立死代碼（`UNTRIGGERED_ACTION`）**，或破壞了非同步調用鏈與異常兜底分支。
+3. **Agent Thrashing（代理人盲目顛簸死循環）**：
+   - 由於缺乏「因果可觀測性」（像沒有三用電表的水電工），AI Agent 遇到畫面沒反應時，往往陷入**「讀取 1,000 行全檔 ➔ 憑空猜測修改 ➔ 慢吞吞全量重吐整檔 ➔ 再次全檔重讀」**的無窮死循環，不僅耗盡 Token，更因長文本注意力衰減改壞原本正常的邏輯。
+
+**CODE-Map** 借鑒 Windows UI Automation (UIA) 的控制樹理念與形式化驗證（如 Lean 定理證明器）的契約思想，將程式碼投影為**「以控制項/進入點為錨點的語意因果圖」**，在規劃、實作與驗收階段提供確定性的數學守衛。
 
 ---
 
-## 🏗️ 核心架構圖
+## 🏗️ 第二章：三層核心引擎架構
 
 ```mermaid
 flowchart TD
-    subgraph S1["1. 語法層 (Tree-sitter / AST)"]
-        A_Ctrl["控制項節點 (DOM / JSX / CLI Switch)"]
-        A_Func["函式宣告與所屬 Scope 深度"]
-        A_Wire["事件綁定語句 (addEventListener / onClick)"]
+    subgraph S1["1. 多語言 AST 語法解析層 (Tree-sitter & DOM Parser)"]
+        A_Ctrl["控制項與進入點錨點<br/>(HTML DOM / JSX / WPF / Textual / CLI)"]
+        A_Func["函式宣告、結構體方法與 Scope 深度"]
+        A_Wire["事件綁定與狀態宣告<br/>(addEventListener / onClick / MODULE_STATE)"]
     end
 
-    subgraph S2["2. 語意圖譜層 (LSP / Call Graph)"]
-        CG_Trace["呼叫點追蹤 (Target Resolver)"]
-        CG_Scope["作用域可達性校驗 (Scope Reachability)"]
+    subgraph S2["2. 跨檔語意與作用域消解層 (Workspace & Scope Graph)"]
+        CG_Trace["跨檔案呼叫點追蹤 (Import/Export Target Resolver)"]
+        CG_Scope["詞法作用域可達性校驗 (Lexical Scope Reachability)"]
+        CG_Vis["DOM 結構閉合與可見性級聯 (Visibility Cascade)"]
     end
 
-    subgraph S3["3. 驗收投影層 (UIA Semantic Tree)"]
-        UIA["🌲 UIA 語意控制樹<br/>#btnDelete (Button)<br/>  └── ⚡ on('click')<br/>        ├── 🔒 [串聯 Stage 1]: Modal 確認<br/>        ├── 🌐 [串聯 Stage 2]: RPC 刪除<br/>        └── 🔀 [並聯 Stage 3]: UI 動畫 + Toast"]
+    subgraph S3["3. 驗收投影與不變量守衛層 (UIA Semantic Tree & Invariants)"]
+        UIA["🌲 UIA 語意控制樹<br/>#btnDelete (Button)<br/>  └── ⚡ on('click')<br/>        ├── 🔒 [Stage 1]: Modal 確認<br/>        ├── 🌐 [Stage 2]: async RPC 刪除<br/>        └── 🔀 [Stage 3]: UI 更新 + Toast"]
     end
 
     S1 --> S2
-    S2 --> CG_Trace
-    CG_Trace --> CG_Scope
-    CG_Scope ==>|"通電且作用域可達"| S3
-    CG_Scope -.->|"深層閉包阻隔"| Err["💥 阻擋發布: ReferenceError 作用域囚禁"]
+    S2 --> CG_Trace & CG_Scope & CG_Vis
+    CG_Trace & CG_Scope & CG_Vis ==>|"通電、作用域可達且可見"| S3
+    CG_Scope -.->|"深層閉包囚禁"| Err1["💥 攔截: BLOCKED_SCOPE (ReferenceError)"]
+    CG_Vis -.->|"父容器隱藏 / 標籤未閉合"| Err2["💥 攔截: BLOCKED_VISIBILITY / UNCLOSED_TAG"]
 ```
+
+### 🌐 支援的 7 大主流語言與 8 種語意適配器
+| 語言類別 | 適配器模組 | 支援副檔名 | 核心捕獲能力與形式化守衛 |
+| :--- | :--- | :--- | :--- |
+| **HTML / DOM** | [`html_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/html_adapter.py) | `.html`, `.htm` | DOM 階層樹（`CONTAINS`）、內聯事件接線（`TRIGGERS`）、外部腳本連結（`GROUNDS_TO`）、標籤閉合與 `hidden`/`display:none` 級聯阻斷（`BLOCKED_VISIBILITY`） |
+| **JavaScript** | [`javascript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/javascript_adapter.py) | `.js`, `.mjs`, `.cjs` | DOM 事件綁定、原型鏈方法、閉包作用域可達性、同步阻塞 API（`alert`/`confirm`）攔截 |
+| **TypeScript / React** | [`typescript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/typescript_adapter.py) | `.ts`, `.tsx` | React JSX 控制項錨點、Hooks 依賴鏈、IoC 裝飾器管線、狀態機轉移與非同步競態守衛 |
+| **Python** | [`python_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/python_adapter.py) | `.py` | OOP 類別繼承、CLI 進入點、PyQt/Tkinter/Textual UI 控制項、主執行緒 `time.sleep` 凍結攔截 |
+| **Rust** | [`rust_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/rust_adapter.py) | `.rs` | `struct` + `impl` 關聯方法消解、`#CLI: main` 進入點、`todo!()` / `unimplemented!()` / `panic!()` 危害攔截 |
+| **Go** | [`go_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/go_adapter.py) | `.go` | 結構體接收器方法（Receiver Methods）、CLI 路由樹、`panic()` 與 `time.Sleep()` 阻塞攔截 |
+| **C#** | [`csharp_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/csharp_adapter.py) | `.cs` | WPF / WinUI / Avalonia 事件綁定（`+=`）、控制項錨點、`Thread.Sleep()` 與 `NotImplementedException` 攔截 |
 
 ---
 
-## 👑 終極架構願景：反向規格驅動的多 Agent 形式化驗收閉環 (Spec-Driven Multi-Agent Closed Loop)
+## 👑 第三章：Spec-Driven 多 Agent 形式化開發協議
 
-### 💥 為什麼現有 Multi-Agent 系統無法開發複雜軟體？
-當前業界的多 Agent 開發架構（如 AutoGen、CrewAI、ChatDev 等）存在三大致命瓶頸：
-1. **自然語言規格的模糊性**：上位 Agent 給出的文字需求充滿歧義，Subagent 實作時容易產生幻覺，擅自將函式封閉在局部閉包中，或遺漏非同步 `await` 接線。
-2. **大模型「肉眼 Review」的不可靠性**：上位 Agent 拿著 Subagent 寫好的數百行代碼進行文字審查，根本無法靜態識破深層閉包囚禁（`ReferenceError`）與非同步競態死穴。
-3. **單元測試會說謊**：Subagent 寫的單元測試常依賴過度 Mock，單元測試全部綠燈，但組裝回 UI 主幹時一按按鈕依然直接崩潰。
-
-### 🚀 CODE-Map 的反向工業化生產線 (Graph as Contract)
-CODE-Map 的終極目標不是事後被動分析代碼，而是**「反過來做」——以數學有向圖作為多 Agent 協同的不可違抗規格契約**：
+現有多 Agent 架構（AutoGen、CrewAI 等）之所以在複雜軟體工程中頻繁翻車，是因為依賴**模糊的自然語言規格**與**不可靠的 LLM 肉眼 Code Review**。CODE-Map 將多 Agent 協作重構為**「以數學有向圖為契約」的四步閉環工業生產線**：
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Boss as 👑 上位架構 Agent (Architect)
-    participant Spec as 📐 CODE-Map 規格圖譜 (Spec Graph)
-    participant Worker1 as 🛠️ Subagent A (函式單元實作)
-    participant Worker2 as ⚡ Subagent B (事件流程接線)
-    participant Engine as 🌲 CODE-Map 圖譜編譯器
-    participant Differ as ⚖️ UIAGraphDiffer (形式化驗收裁判)
+    participant Spec as 📐 CODE-Map 雙層規格 (Spec Graph)
+    participant Worker1 as 🛠️ Subagent A (單元邏輯)
+    participant Worker2 as ⚡ Subagent B (DOM 與事件接線)
+    participant Engine as 🌲 CODE-Map 編譯與驗收器
 
-    Boss->>Spec: 1. 規劃架構因果圖譜 (UI Anchor, Event, Call Chain, Invariants)
-    Boss->>Worker1: 2. 派發單元契約 (實作 RPC 函式，規範為 async)
-    Boss->>Worker2: 3. 派發接線契約 (綁定 #btnDelete ➔ on('click') ➔ RPC)
+    Boss->>Spec: 1. 定義目標因果圖譜 (宏觀拓撲連線 + 節點內嵌 Pseudo-Code)
+    Boss->>Worker1: 2. 派發節點切片合約 (輸入/輸出 + 虛擬碼骨架)
+    Boss->>Worker2: 3. 派發接線切片合約 (#btn ➔ onClick ➔ Handler)
     
-    par Subagents 並行實作與自測
-        Worker1->>Worker1: 撰寫代碼 + 通過本地單元測試
-        Worker2->>Worker2: 撰寫接線 + 通過本地流程測試
+    par 微創手術式實作 (禁止全量重寫)
+        Worker1->>Worker1: 依 Pseudo-Code 實作節點 + 單元自測
+        Worker2->>Worker2: 依拓撲邊接線 + 流程自測
     end
 
-    Worker1-->>Engine: 4. 提交單元代碼
-    Worker2-->>Engine: 4. 提交接線代碼
+    Worker1-->>Engine: 4. 提交節點局部 Diff
+    Worker2-->>Engine: 4. 提交接線局部 Diff
     
-    Engine->>Differ: 5. 自動編譯為 Actual CODE-Map
-    Differ->>Differ: 6. 形式化圖差分: diff(Spec, Actual)
+    Engine->>Engine: 5. 編譯 Actual Graph 並執行 SpecVerifier & Invariants 校驗
     
-    alt 💥 發現閉包囚禁 / 遺漏 await / 同步阻塞危害
-        Differ-->>Boss: 🔴 BLOCKED: 精準指出違背的因果邊與檔案行號
-        Boss->>Worker2: 7. 攜帶「精確因果違規報告」原件退回重修 (0 模糊度)
-    else 🟢 100% 吻合規格圖譜且守衛全數通過
-        Differ-->>Boss: 🟢 READY_TO_SHIP: 通電且作用域可達
-        Boss->>Boss: 8. 正式合入主幹發布 (Ship to Production)
+    alt 🔴 發現斷鏈 / 閉包囚禁 / 遺漏異常分支
+        Engine-->>Boss: 輸出精確反例報告 (Counterexample: 斷裂邊與行號)
+        Boss->>Worker2: 6. 攜帶反例原件靶向退回重修 (0 模糊度)
+    else 🟢 100% 拓撲滿射且守衛全數通過
+        Engine-->>Boss: 🟢 READY_TO_SHIP (確定性終止信號)
+        Boss->>Boss: 7. 立即終止回合並合入主幹 (禁止重複盲讀)
     end
 ```
 
-### 🔁 三階段閉環流程：
-1. **規格定義 (Spec Planning)**：
-   * 上位 Agent 規劃出不可違抗的 `Spec CODE-Map`，明確定義 UI 控制項錨點（如 `#btnDelete`）、觸發事件（`on('click')`）、非同步調用鏈與形式化守衛（`NO_SYNC_BLOCKING`、`SCOPE_ACCESSIBLE`）。
-2. **分解派發與並行自測 (Decomposition & Self-Testing)**：
-   * **Subagent A** 專注於底層單元邏輯，自跑單元測試。
-   * **Subagent B** 專注於事件接線與業務流程，自跑流程測試。
-3. **形式化驗收與自動重派修復 (Deterministic Acceptance & Self-Correction)**：
-   * 所有 Subagents 完成代碼後，上位 Agent 調用 CODE-Map 編譯器將聚合源碼抽取為 `Actual CODE-Map`。
-   * 透過 `UIAGraphDiffer` 進行純數學比對。若不符規格或觸發守衛紅牌，上位 Agent **不需要人工介入，直接帶著圖譜違規點將任務退回給責任 Subagent 重新修正**，直到全綠燈放行！
+### 1️⃣ 第一步：雙層規約先行 —— 宏觀拓撲 + 微觀 Pseudo-Code
+> 詳見完整規範：[《CODE-Map 形式化規格規劃與 Subagent 派發指引》](docs/SPEC_DRIVEN_PLANNING_GUIDE.md)
 
-### 🧩 雙層規約架構：為什麼節點中必須內嵌 Pseudo-Code？(Two-Tier Specification)
+單純的拓撲圖只能保證「函式被呼叫到」，無法防禦「函式內部演算法走偏或吞掉異常」。因此規劃 `TargetGraph` 時，必須同時定義兩層規約：
+- **宏觀因果拓撲 (Macro Topology)**：定義節點間的接線（`TRIGGERS`, `DISPATCHES`, `GROUNDS_TO`），從圖論上消滅入度為 0 的死代碼與閉包阻隔。
+- **微觀行為合約 (Micro Behavioral Contract)**：在流程節點的 `spec` 屬性中內嵌**結構化虛擬碼 (Pseudo-Code)**、前後置條件（Pre/Post-conditions）以及**「分支到邊的嚴格映射（Branch-to-Edge Mapping）」**：
+  - 虛擬碼中每一個 `TRY / CATCH / FINALLY` 或 `IF / ELSE` 分支，必須明確標註對應圖譜中的哪一條出邊（例如：`CATCH error ➔ EMIT_EDGE: TRIGGERS ➔ showToast`），徹底杜絕吞掉錯誤的空 catch 區塊。
 
-> 📘 **詳細技術指引**：[《CODE-Map 形式化規格規劃與 Subagent 派發指引：以微觀虛擬碼與宏觀因果圖譜建構雙層合約》](docs/SPEC_DRIVEN_PLANNING_GUIDE.md)
-
-單純的宏觀拓撲圖能保證「函式必定通電被呼叫到」，但無法防禦「函式內部演算法走偏或遺漏兜底分支」。因此，CODE-Map 規範在規劃 Target Graph 時，所有流程與動作節點必須內嵌結構化 **Pseudo-Code 行為合約**：
-
-1. **宏觀因果拓撲 (Macro Topology)**：定義節點間的接線（TRIGGERS, DISPATCHES, GROUNDS_TO），從圖論數學上消除死代碼、孤立函式與閉包阻隔。
-2. **微觀行為合約 (Micro Behavioral Contract)**：在節點 spec 屬性中內嵌演算法虛擬碼、前後置條件（Pre/Post-conditions）以及**「分支到邊的嚴格映射（Branch-to-Edge Mapping）」**：
-   - 虛擬碼中每一個 TRY / CATCH / FINALLY 或 IF / ELSE 分支，必須明確標註對應圖譜中的哪一條出邊（Outgoing Edge）。
-   - 例如：CATCH error ➔ EMIT_EDGE: TRIGGERS ➔ showToast(error)，杜絕吞掉異常的空 catch 區塊。
-3. **AST 骨架級驗收 (Skeleton Verification)**：CODE-Map 不僅驗證呼叫關係，還靜態掃描 AST 是否具備對應的分支結構與狀態復原副作用，達成時空雙維度的嚴密閉環。
-
-### 🗣️ Subagent 異議機制：規格可被挑戰 (Spec Negotiation)
-
-> **規格圖譜是契約，但不是聖旨。** 前期設計必然存在想錯之處，往往要到實作時才會暴露（瀑布式開發的老教訓）。若閉環只允許「上位 Agent 單向退件」，Subagent 只能硬湊代碼去迎合一份錯誤的規格，最終產出「圖譜全綠、功能錯誤」的結果。
-
-因此閉環必須是**雙向**的：Subagent 除了「實作」與「被退件」之外，還擁有第三種合法回應——**提出規格異議 (Spec Objection)**。
-
-```mermaid
-flowchart TD
-    Spec["📐 Spec CODE-Map"] --> Worker["🛠️ Subagent 實作"]
-    Worker -->|"可行"| Submit["提交代碼"]
-    Worker -->|"發現規格不可行 / 有更佳設計"| Objection["🗣️ 提出 Spec Objection<br/>(違反之節點/邊 + 理由 + 替代方案)"]
-    Submit --> Differ["⚖️ UIAGraphDiffer 驗收"]
-    Differ -->|"🔴 BLOCKED"| Worker
-    Differ -->|"🟢 READY_TO_SHIP"| Ship["合入主幹"]
-    Objection --> Boss{"👑 上位架構 Agent 裁決"}
-    Boss -->|"採納"| Revise["修訂 Spec 圖譜 (版本 +1)<br/>並通知受影響之 Subagents"]
-    Boss -->|"駁回 (附理由)"| Worker
-    Revise --> Spec
-```
-
-**異議報告的最低格式**（結構化，避免淪為模糊的「做不到」）：
-
-```yaml
-objection:
-  spec_version: 3
-  target: "edge: confirmModal.onConfirm -> deleteItem"   # 受質疑的節點或邊
-  reason: "後端刪除為批次 API，逐筆呼叫會造成 N 次請求與部分失敗不一致"
-  evidence: "api/items.ts:L42 只提供 deleteMany(ids)"
-  proposal: "改為 confirmModal.onConfirm -> deleteItems(ids) -> api.deleteMany"
-  impact: ["#btnDelete", "#btnBulkDelete"]                 # 受影響之 UI 錨點
-```
-
-**裁決原則：**
-1. **上位 Agent 保有最終決定權**，但駁回必須附理由，避免 Subagent 無限重試同一錯誤方向。
-2. **規格修訂需版本化**：每次採納異議即遞增 `spec_version`，並對受影響錨點之所有 Subagents 廣播，防止各自依據不同版本實作。
-3. **異議與退件分開計數**：同一節點反覆出現異議，代表規格設計本身有問題，應升級為人類架構師審查。
-
-### 🛡️ 反顛簸協定與微創手術式補丁 (Anti-Thrashing Protocol & Surgical Patching)
-
-> **終結「讀 ➔ 改 ➔ 再讀 ➔ 再改」的盲目顛簸迴圈 (Agent Thrashing)**。
-
-在多 Agent 協同開發中，最消耗 Token 且讓工程師心慌的現象是：Agent 遇到問題動輒全量重讀千行代碼，再慢吞吞全量重吐輸出整個檔案。長文本輸出不僅浪費數分鐘，更會因模型注意力衰減將原本正常的邏輯改壞（回歸錯誤）。
-
-CODE-Map 透過形式化圖譜與因果驗收器，強制推行四大反顛簸工程規範：
+### 2️⃣ 第二步：反顛簸協定與微創手術式補丁 (Anti-Thrashing Protocol)
+為了終結 Agent「讀全檔 ➔ 改一點 ➔ 重讀全檔 ➔ 慢速重吐整檔」的顛簸死循環，所有 Agent 必須遵守三大鐵律：
 
 ```mermaid
 flowchart LR
@@ -177,201 +129,128 @@ flowchart LR
     end
 ```
 
-1. **Surgical Node-Level Patching (嚴禁全量重寫，強制節點級微創打補丁)**：
-   - 嚴禁因為修改 10~20 行局部邏輯而全量重寫輸出數百或數千行的原始碼檔案。
-   - 所有代碼變更必須限定在目標節點（函式、類別、方法）邊界內進行局部修補（`edit_file`），輸出 Token 數減少 95%，修改時間從 120 秒降至 3 秒，最大化保留上下文穩定性。
-2. **Deterministic Stopping Condition (以形式化驗收作為唯一終止信號)**：
-   - 代碼修改後，必須立即執行確定性驗證指令（如 `pytest`、`python.exe codemap.py verify` 或 CDP 狀態檢查），以二元形式化結果（`PASS` / `FAIL`）作為唯一決策依據。
-   - **若驗證通過，立即終止任務回合並回報結果**，嚴禁出於「不放心」而重複讀取全檔。
-   - **若驗證失敗，僅針對反例報告（Counterexample）中指出的具體斷鏈邊進行靶向排查**，嚴禁發散性泛讀。
-3. **Topological Invariant Guardrails (拓撲不變量守衛檢核)**：
-   - **入度防呆 (`NO_UNTRIGGERED_ACTION`)**：任何新增功能必須通過可達性證明，嚴禁入度為 0 的孤立節點（杜絕「功能寫了卻未被觸發」）。
-   - **引用防呆 (`NO_DANGLING_GROUNDING`)**：嚴禁所有調用目標指向不存在符號的懸空引用。
-   - **作用域防呆 (`NO_BLOCKED_SCOPE`)**：嚴禁將事件處理器或外部依賴函式囚禁於無法導出的內部閉包中。
+1. **節點切片讀取 (`--slice` / `--bundle`)**：禁止盲目讀取千行大檔，只提取目標節點及其相鄰因果邊的原始碼切片，將 Context 雜訊降為零。
+2. **微創打補丁 (Surgical Node-Level Patching)**：嚴禁全量重寫檔案。所有變更必須限定在目標節點（函式/方法）邊界內局部替換（`edit_file`），輸出 Token 減少 95%，修改時間從 120 秒降至 3 秒。
+3. **確定性終止信號 (Deterministic Stopping Condition)**：修改後立即執行 `codemap.py --verify-spec` 或 `pytest`。**只要驗證通過（PASS），立即終止回合並交付**，嚴禁出於「不放心」而再次重讀全檔；若失敗（FAIL），僅針對反例指出的斷鏈邊靶向修正。
+
+### 3️⃣ 第三步：雙向規格異議機制 (Spec Negotiation)
+> **規格圖譜是契約，但不是聖旨。** 若前期規格設計有誤，單向強制驗收只會逼 Subagent 硬湊出「圖譜全綠、功能錯誤」的代碼。
+
+當 Subagent 實作時發現既有架構與規格衝突，可提交結構化的 **規格異議報告 (`Spec Objection`)**，並由 CODE-Map 的 `--verify-objection` 自動對源碼進行 AST 防偽查證：
+
+```yaml
+objection:
+  spec_version: 3
+  target: "edge: confirmModal.onConfirm -> deleteItem"   # 受質疑的節點或邊
+  reason: "後端刪除為批次 API，逐筆呼叫會造成 N 次請求與部分失敗不一致"
+  evidence: "api/items.ts:L42 只提供 deleteMany(ids)"    # 由 --verify-objection 自動查驗 AST 真偽
+  proposal: "改為 confirmModal.onConfirm -> deleteItems(ids) -> api.deleteMany"
+  impact: ["#btnDelete", "#btnBulkDelete"]                 # 受影響之 UI 錨點
+```
 
 ---
 
-## 📂 專案結構與遷移資產
+## 🚀 第四章：快速上手與 CLI 武器庫 (Quick Start)
+
+CODE-Map 提供統一的命令列入口 [`codemap.py`](file:///d:/AntiGravity/UIA_Coder/codemap.py)，支援單檔分析、跨檔工作區建圖、節點切片打包、規格偏序驗收與視覺化儀表板：
+
+```powershell
+# 1. 查詢目前已支援的所有程式語言與副檔名
+python.exe -X utf8 codemap.py --list-languages
+
+# 2. 單一檔案語意控制樹分析與形式化不變量守衛檢驗 (--check 違規時返回非 0 狀態碼)
+python.exe -X utf8 codemap.py --file "src/sample_go_app.go" --check
+
+# 3. 跨檔案 / 整個專案目錄聯合建圖 (自動消解跨模組 import/export 依賴鏈)
+python.exe -X utf8 codemap.py --dir "uia_coder" --check
+
+# 4. 節點前向切片與原始碼精準打包 (提供給 Subagent 的零雜訊 Context)
+python.exe -X utf8 codemap.py --file "legacy/workspaceFileTree.js" --slice "#btnDelete"
+python.exe -X utf8 codemap.py --file "legacy/workspaceFileTree.js" --bundle "#btnDelete"
+
+# 5. 上位規格契約偏序驗收 (比對 Target Spec 與實際代碼是否 100% 通電吻合)
+python.exe -X utf8 codemap.py --file "legacy/workspaceFileTree.js" --verify-spec "spec.json"
+
+# 6. Subagent 規格異議 AST 防偽查證
+python.exe -X utf8 codemap.py --verify-objection "objection.yaml" --repo "."
+
+# 7. 雙檔案或 Git 歷史 Commits 語意圖譜差分 (Semantic Graph Diff)
+python.exe -X utf8 codemap.py --diff-files "legacy/workspaceFileTree_buggy.js" "legacy/workspaceFileTree.js" --check
+python.exe -X utf8 codemap.py --file "uia_coder/core/graph.py" --git-diff HEAD~1
+
+# 8. 導出雙欄互動式 HTML 視覺化儀表板 (點擊圖譜節點平滑滾動並高亮對應源碼)
+python.exe -X utf8 codemap.py --file "legacy/workspaceFileTree.js" --html "reports/dashboard.html"
+
+# 9. 執行全套自動化測試套件 (含多語言引擎、HTML DOM 級聯、跨檔消解與規格驗收)
+python.exe -X utf8 -m pytest tests/
+```
+
+---
+
+## 🏆 第五章：實戰驗證與基準測試（35 大頂級開源專案 × 699 Commits）
+
+CODE-Map 已經過橫跨 **10 大現代軟體架構領域、35 個頂級開源專案、699 個真實 Bug 修復 Commits（共 920 個修改檔案）** 的嚴苛基準實測：
+- **可執行邏輯變更捕獲率**：**100.0% (818 / 818)**（其餘 102 個為純註釋、型別宣告或文檔微調，由 AST 去噪指紋精準過濾）。
+- **萬級節點樹崩潰率**：**0.0%**（全面採用 `TreeCursor` 原生迭代與程序隔離技術）。
+
+| 架構領域支柱 | 驗證開源專案（語言） | 審查規模 (Commits / Files) | 可執行邏輯捕獲率 | 核心驗證場景 |
+| :--- | :--- | :---: | :---: | :--- |
+| **1. 終端 TUI 五大語言滿貫** | `textual` (Py), `ink` (TS), `ratatui` (Rust), `bubbletea` (Go), `spectre.console` (C#) | 100 / 148 | **100.0%** | 終端事件迴圈、按鍵綁定、非同步訊息派發、畫面緩衝區重繪 |
+| **2. 跨平台桌面 GUI 與視覺樹** | `Avalonia` (C#), PyQt/Tkinter 實戰案例 (Py) | 20 / 30 | **100.0%** | 視覺樹/邏輯樹路由事件冒泡、StyledProperty、UI 執行緒阻塞攔截 |
+| **3. 前端 DOM 與響應式微核心** | `todomvc` (JS), `Sortable` (JS), `alpine` (JS), `preact` (JS), `vue-core` (TS) | 99 / 127 | **100.0%** | 原生拖曳事件、Virtual DOM Diff、Proxy 響應式依賴追蹤、DOM 可見性 |
+| **4. 高性能非同步 Web 路由** | `fastapi` (Py), `gin` (Go), `axum` (Rust) | 60 / 66 | **100.0%** | 前綴樹路由分發、ASGI / Tower 中介軟體管線、依賴注入消解 |
+| **5. 企業級 IoC 與裝飾器管線** | `nestjs` (TS), `pydantic` (Py) | 40 / 46 | **100.0%** | Guards / Interceptors 管線、Request-scoped DI、資料模型驗證器 |
+| **6. 狀態機與全域不可變 Store** | `xstate` (TS), `zustand` (TS) | 40 / 49 | **100.0%** | 有限狀態機轉移守衛、閉包不可變性、非同步 Persist 競態防護 |
+| **7. 企業級 ORM 與連線池管理** | `efcore` (C#), `go-redis` (Go), `httpx` (Py), `RestSharp` (C#) | 80 / 107 | **100.0%** | LINQ 運算式樹、連線池狀態機、非同步超時與髒連線回滾 |
+| **8. AI 大模型推理與平行計算** | `vllm` (Py), `polars` (Rust) | 40 / 62 | **100.0%** | PagedAttention 排程器死鎖防護、Rayon 平行算子與 Arrow 記憶體管線 |
+| **9. 全端 SSR、RPC 與編譯打包** | `next.js` (TS), `trpc` (TS), `vite` (TS) | 60 / 74 | **100.0%** | Server Actions 跨端接線、端到端型別 RPC 路由、HMR 熱重載廣播 |
+| **10. 雲原生代理、CLI 與 ECS 引擎** | `caddy` (Go), `traefik` (Go), `bevy` (Rust), `zellij` (Rust), `ripgrep` (Rust), `bat` (Rust), `fzf` (Go), `cobra` (Go) | 160 / 211 | **100.0%** | 自動 TLS 重載、動態邊緣路由、ECS 並發排程、Actor IPC、CLI 命令樹 |
+
+> 📊 完整數據與逐案剖析請參閱：[《三十五項開源專案 699 Commits 形式化驗證白皮書》](docs/why_code_map_matters_35_repos_whitepaper.md) 與 [綜合評估報告 (`reports/dogfooding_benchmark_35_repos.md`)](reports/dogfooding_benchmark_35_repos.md)。
+
+---
+
+## 📂 第六章：專案目錄結構與演進藍圖
 
 ```text
 d:\AntiGravity\UIA_Coder\
-├── codemap.py                       # 🌲 CODE-Map 官方統一命令列入口 (Official CLI)
-├── uia_coder/                       # 🧠 CODE-Map 核心引擎套件 (Core & Adapters)
-│   ├── core/                        # 語言無關圖論運算層
-│   │   ├── graph.py                 # UIACodeGraph (NetworkX 圖結構、切片、驗收)
-│   │   ├── differ.py                # ⚡ UIAGraphDiffer (圖譜語意差分與代碼對照引擎)
-│   │   └── base_adapter.py          # BaseUIAGraphBuilder (適配器抽象介面)
-│   ├── adapters/                    # 🔌 語言專屬語意解析層 (Strategy / Registry)
-│   │   ├── __init__.py              # 語言註冊中心與自動路由工廠
-│   │   ├── javascript_adapter.py    # JavaScript DOM / 原型鏈 / Backbone-Spine 事件適配器
-│   │   ├── typescript_adapter.py    # TypeScript / React TSX 適配器
-│   │   ├── python_adapter.py        # Python OOP、CLI 入口、PyQt 與 Textual 裝飾器適配器
-│   │   ├── rust_adapter.py          # 🦀 Rust 結構體關聯方法、CLI 進入點與巨集危害適配器
-│   │   ├── go_adapter.py            # 🐹 Go 接收器方法、CLI 進入點與 panic/sleep 危害適配器
-│   │   └── csharp_adapter.py        # 🎯 C# WPF/WinUI 事件綁定、CLI 與 Thread.Sleep 危害適配器
-│   ├── cli.py                       # 🚀 命令列介面邏輯實作
-│   └── __main__.py                  # 支援 python -m uia_coder 執行模組
-├── docs/                            # 📚 官方權威文檔與研究白皮書
-│   └── why_code_map_matters_35_repos_whitepaper.md # 🏆 三十五項開源專案 699 Commits 形式化驗證白皮書
-├── src/                             # 📄 多語言範例代碼 (JS/Python/Rust/Go/C#)
-│   ├── sample_rust_app.rs           # 🦀 Rust 範例程式 (包含 todo! 危害攔截示範)
-│   ├── sample_go_app.go             # 🐹 Go 範例程式 (包含 panic/time.Sleep 示範)
-│   └── sample_csharp_app.cs         # 🎯 C# 範例程式 (包含 WPF 事件接線與 Thread.Sleep 示範)
-├── tests/                           # 🧪 自動化測試套件
-│   ├── test_graph_engine.py         # 多語言圖譜構建、差分與全語言驗收測試 (Tests 0-8)
-│   └── test_workspace_commits.py    # 真實 Git 倉庫歷史 Commits 語意驗收測試
-├── tools/                           # 🛠️ 輔助開發與探勘工具
-│   ├── audit_todomvc_20_flow_bugs.py # 🌲 TodoMVC 20 個真實流程錯誤基準測試工具
-│   ├── audit_textual_20_flow_bugs.py # 🐍 Textual 20 個真實核心修復基準測試工具
-│   ├── audit_sortable_20_flow_bugs.py # 🔀 SortableJS 20 個原生拖曳事件基準測試工具
-│   ├── audit_xstate_20_flow_bugs.py  # ⚙️ XState 20 個狀態機轉移基準測試工具
-│   ├── audit_triple_benchmark.py     # 🏆 Ink + HTTPX + Alpine 三大專案綜合稽核套件
-│   ├── audit_rust_go_benchmark.py    # 🦀 Ratatui (Rust) + 🐹 Bubbletea (Go) 綜合稽核套件
-│   ├── audit_csharp_cobra_benchmark.py # 🎯 Spectre.Console (C#) + 🐍 Cobra (Go) 綜合稽核套件
-│   ├── audit_preact_vue_benchmark.py # ⚡ Preact (VDOM) + 💚 Vue 3 (Reactivity) 綜合稽核套件
-│   ├── audit_web_cli_quad_benchmark.py # 🌐 FastAPI + Gin + ⚡ ripgrep + fzf 四大專案綜合稽核套件
-│   ├── audit_csharp_rust_expansion_benchmark.py # 🚀 Avalonia + RestSharp (C#) + bat + axum (Rust) 擴展套件
-│   ├── audit_ultimate_six_benchmark.py # 🔥 NestJS + Zustand + go-redis + Zellij + Polars + EF Core 旗艦稽核套件
-│   ├── audit_frontier_eight_benchmark.py # 🌟 pydantic + vLLM + trpc + Vite + Next.js + Caddy + Traefik + Bevy 稽核套件
-│   ├── codemap_miner.py             # ⛏️ Git 倉庫歷史 Commits 探勘評估引擎
-│   └── generate_interactive_report.py # 雙欄互動式 HTML 儀表板生成器
-├── legacy/                          # 📦 歷史封存 (早期原型與過渡轉發墊片)
-│   ├── uia_graph_engine.py          # 早期向後相容墊片 (已模組化至 uia_coder)
-│   └── uia_code_diff.py             # 第一代正則差分原型
-├── vendor/
-│   └── aider/repomap.py             # Aider 官方 RepoMap 參考實作
-├── reports/                         # 生成之 HTML 視覺化儀表板與評估報告
-│   ├── dogfooding_benchmark_35_repos.md # 🏆 跨 35 大開源專案 699 Commits 實戰驗證綜合報告 (全領域覆蓋)
-│   ├── dogfooding_benchmark_27_repos.md # 跨 27 大開源專案 539 Commits 實戰驗證綜合報告
-│   ├── dogfooding_benchmark_21_repos.md # 跨 21 大開源專案 419 Commits 實戰驗證綜合報告
-│   ├── dogfooding_benchmark_17_repos.md # 跨 17 大開源專案 339 Commits 實戰驗證綜合報告
-│   ├── dogfooding_benchmark_13_repos.md # 跨 13 大開源專案 259 Commits 實戰驗證報告
-│   ├── dogfooding_benchmark_11_repos.md # 跨 11 大開源專案 219 Commits 實戰驗證報告
-│   ├── dogfooding_benchmark_9_repos.md # 跨 9 大開源專案 179 Commits 實戰驗證報告
-│   ├── dogfooding_benchmark_7_repos.md # 跨 7 大開源專案 139 Commits 實戰驗證報告
-│   └── dogfooding_experience_todomvc_textual.md # TodoMVC 與 Textual 雙戰場早期報告
-├── AGENTS.md                        # Antigravity 專案規則與環境規範
-└── README.md                        # 本專案架構與使用指引
+├── codemap.py                             # 🌲 CODE-Map 官方統一 CLI 入口
+├── AGENTS.md                              # 🛡️ AI Agent 協同開發規範與反顛簸協定 (Anti-Thrashing Protocol)
+├── README.md                              # 📖 專案核心架構與全景指引 (本文件)
+├── uia_coder/                             # 🧠 CODE-Map 核心引擎套件
+│   ├── core/                              # 語言無關圖論與形式化驗證核心
+│   │   ├── graph.py                       # UIACodeGraph (有向圖結構、不變量守衛、切片與源碼打包)
+│   │   ├── differ.py                      # UIAGraphDiffer (語意圖譜差分、AST 去噪指紋、增量違規判定)
+│   │   ├── spec_verifier.py               # SpecVerifier (上位規格契約偏序驗收 & Subagent 異議 AST 查證)
+│   │   ├── workspace_graph.py             # WorkspaceGraphBuilder (跨檔案 Import/Export 符號消解與聯合建圖)
+│   │   └── base_adapter.py                # BaseUIAGraphBuilder (多語言適配器抽象基底與去噪指紋計算)
+│   ├── adapters/                          # 🔌 多語言 AST 語意適配器 (Strategy & Registry Pattern)
+│   │   ├── html_adapter.py                # 🌐 HTML/DOM 結構樹、標籤閉合與可見性級聯適配器
+│   │   ├── javascript_adapter.py          # 🟨 JavaScript DOM / 原型鏈 / 閉包作用域適配器
+│   │   ├── typescript_adapter.py          # 🟦 TypeScript / React TSX / 狀態機適配器
+│   │   ├── python_adapter.py              # 🐍 Python OOP / CLI / PyQt / Textual 適配器
+│   │   ├── rust_adapter.py                # 🦀 Rust Struct Impl / CLI / Panic-Todo 守衛適配器
+│   │   ├── go_adapter.py                  # 🐹 Go Receiver / CLI / Panic-Sleep 守衛適配器
+│   │   └── csharp_adapter.py              # 🎯 C# WPF / WinUI / Avalonia 事件綁定適配器
+│   ├── reporters/                         # 📊 視覺化報告生成器
+│   │   └── html_reporter.py               # 雙欄互動式 HTML 語意控制樹儀表板
+│   └── cli.py                             # 🚀 命令列參數路由與功能整合
+├── docs/                                  # 📚 架構設計規範與理論白皮書
+│   ├── SPEC_DRIVEN_PLANNING_GUIDE.md      # 雙層規約架構 (Macro Topology + Micro Pseudo-Code) 實戰指南
+│   ├── CODEMAP_NEXT_PHASE_TODO.md         # 靜態分析引擎進階演進與紅隊審計修復清單
+│   └── why_code_map_matters_35_repos_whitepaper.md # 35 專案 699 Commits 形式化因果圖論白皮書
+├── tests/                                 # 🧪 自動化回歸測試套件 (18 項核心測試 100% PASS)
+│   ├── test_graph_engine.py               # 多語言圖譜構建、差分與不變量守衛測試
+│   ├── test_html_adapter.py               # HTML DOM 階層、未閉合標籤與隱藏屬性級聯測試
+│   ├── test_next_phase_features.py        # 跨檔依賴消解、SpecVerifier 偏序驗收與異議防偽測試
+│   └── test_workspace_commits.py          # 真實 Git 歷史提交語意差分驗收測試
+├── tools/                                 # 🛠️ 大規模開源專案基準探勘與稽核工具群
+└── reports/                               # 📈 基準測試報告與互動式 HTML 視覺化產出
 ```
 
----
-
-## 🚀 快速上手 (Quick Start)
-
-### 1. 執行 CODE-Map CLI 引擎
-支援傳入 `.js`、`.ts`、`.tsx`、`.py`、`.rs`、`.go` 或 `.cs` 檔案，引擎會**自動辨識副檔名並調用對應語言適配器**：
-```powershell
-# 查詢目前已支援之程式語言 (已支援 JavaScript, TypeScript, Python, Rust, Go, C#)
-python.exe -X utf8 codemap.py --list-languages
-
-# 分析單一檔案並驗收 (直接輸出極簡 UIA 語意控制樹)
-python.exe -X utf8 codemap.py --file "src/sample_go_app.go" --check
-
-# 比對兩個檔案之間的語意圖譜差分 (Parent 規格書 vs Subagent 實作代碼)
-python.exe -X utf8 codemap.py --diff-files "legacy/workspaceFileTree_buggy.js" "legacy/workspaceFileTree.js" --check
-
-# 執行全套多語言自動化回歸測試 (含 Tests 0-8 全數綠燈通過)
-python.exe -X utf8 tests/test_graph_engine.py
-
-# 執行真實開源專案基準測試
-python.exe -X utf8 tools/audit_todomvc_20_flow_bugs.py
-python.exe -X utf8 tools/audit_textual_20_flow_bugs.py
-```
-
----
-
-## 🛡️ 已驗證的真實案例 (Case Study)
-
-* **JavaScript (Commit `df3cc5f` & `a1995e4`)**：
-  * 成功攔截 `init()` 內部閉包囚禁造成的 `ReferenceError` 與 `window.confirm` 阻塞。
-  * 修復後通過驗收，前向切片精準捕獲非同步 `[await]` 調用鏈。
-* **Python (PyQt & Tkinter GUI)**：
-  * 成功攔截槽函式被深鎖在 `setup_ui()` 內部導致外部無效連接的死穴。
-  * 成功抓出 UI 主執行緒中的 `time.sleep()` 介面凍結危害（`🔴 BLOCKED_BY_INVARIANTS`）。
-  * 修復至模組/類別可達作用域後亮綠燈（`🟢 READY_TO_SHIP`）。
-* **🦀 Rust (結構體與系統併發)**：
-  * 支援 `struct` + `impl Struct` 關聯方法解析與 `self.method()` 消解。
-  * 自動將 `fn main()` 識別並錨定為 `#CLI: main` 控制樹進入點。
-  * 攔截未完成實作巨集 (`todo!()`, `unimplemented!()`) 與執行期崩潰巨集 (`panic!()`)，自動觸發非同步守衛阻擋（`🔴 BLOCKED_BY_INVARIANTS`）。
-* **🐹 Go (結構體接收器與併發恐慌)**：
-  * 支援 `func (s *Server) Method()` 結構體接收器方法與作用域消解。
-  * 自動識別 `func main()` 並合成 `#CLI: main` 進入點。
-  * 攔截 `panic()` 致命恐慌與 `time.Sleep()` 阻塞危害（`🔴 BLOCKED_BY_INVARIANTS`）。
-* **🎯 C# (WPF/WinUI 控制項事件綁定與執行緒凍結)**：
-  * 支援 `btnDelete.Click += OnClick` 事件綁定，直接生成原生 `#btnDelete (Button)` 控制項錨點。
-  * 自動建立事件觸發與處理常式因果接線。
-  * 攔截 UI 主執行緒中的 `Thread.Sleep()` 介面凍結與 `NotImplementedException` 未完成實作例外（`🔴 BLOCKED_BY_INVARIANTS`）。
-* **🏆 真實開源專案 Dogfooding 淬鍊 (跨 35 大主流專案 699 Commits 驗證 & 全領域覆蓋)**：
-  * **`tastejs/todomvc` (JavaScript 前端)**：19 Commits / 30 檔案，邏輯變更捕獲率 **100.0% (29/29)**。
-  * **`Textualize/textual` (Python TUI)**：20 Commits / 27 檔案，邏輯變更捕獲率 **100.0% (24/24)**。
-  * **`SortableJS/Sortable` (JavaScript 拖曳)**：20 Commits / 22 檔案，邏輯變更捕獲率 **100.0% (20/20)**。
-  * **`statelyai/xstate` (TypeScript 狀態機)**：20 Commits / 28 檔案，邏輯變更捕獲率 **100.0% (23/23)**。
-  * **`vadimdemedes/ink` (TypeScript React CLI)**：20 Commits / 37 檔案，邏輯變更捕獲率 **100.0% (35/35)**。
-  * **`encode/httpx` (Python 非同步 HTTP)**：20 Commits / 24 檔案，邏輯變更捕獲率 **100.0% (20/20)**。
-  * **`alpinejs/alpine` (JavaScript 響應式微核心)**：20 Commits / 22 檔案，邏輯變更捕獲率 **100.0% (20/20)**。
-  * **`ratatui/ratatui` (Rust 系統級 TUI / 緩衝區繪製)**：20 Commits / 31 檔案，邏輯變更捕獲率 **100.0% (31/31)**。
-  * **`charmbracelet/bubbletea` (Go TUI / Elm 架構)**：20 Commits / 26 檔案，邏輯變更捕獲率 **100.0% (23/23 可執行)**。
-  * **`spectreconsole/spectre.console` (C# .NET Console / 旗艦 TUI)**：20 Commits / 27 檔案，邏輯變更捕獲率 **100.0% (27/27)**。
-  * **`spf13/cobra` (Go 全域 CLI 命令樹 / 旗標分發基石)**：20 Commits / 21 檔案，邏輯變更捕獲率 **100.0% (18/18 可執行)**。
-  * **`preactjs/preact` (JavaScript 極致輕量 Virtual DOM / Hooks)**：20 Commits / 27 檔案，邏輯變更捕獲率 **100.0% (22/22 可執行)**。
-  * **`vuejs/core` (TypeScript 核心 / Reactivity 依賴追蹤)**：20 Commits / 26 檔案，邏輯變更捕獲率 **100.0% (25/25 可執行)**。
-  * **`tiangolo/fastapi` (Python 非同步 Web / 路由與依賴注入)**：20 Commits / 21 檔案，邏輯變更捕獲率 **100.0% (21/21)**。
-  * **`gin-gonic/gin` (Go 前綴樹路由 / 中介軟體管線)**：20 Commits / 23 檔案，邏輯變更捕獲率 **100.0% (17/17 可執行)**。
-  * **`BurntSushi/ripgrep` (Rust 高併發搜尋 / Mmap / 執行緒池)**：20 Commits / 23 檔案，邏輯變更捕獲率 **100.0% (18/18 可執行)**。
-  * **`junegunn/fzf` (Go 終端互動事件循環 / 模糊搜尋引擎)**：20 Commits / 23 檔案，邏輯變更捕獲率 **100.0% (22/22 可執行)**。
-  * **`AvaloniaUI/Avalonia` (C# 跨平台 GUI / 控制項樹 / XAML)**：20 Commits / 30 檔案，邏輯變更捕獲率 **100.0% (26/26 可執行)**。
-  * **`restsharp/RestSharp` (C# 旗艦非同步 HTTP 客戶端 / 請求管線)**：20 Commits / 32 檔案，邏輯變更捕獲率 **100.0% (21/21 可執行)**。
-  * **`sharkdp/bat` (Rust 現代語法高亮終端分頁器 / CLI)**：20 Commits / 21 檔案，邏輯變更捕獲率 **100.0% (20/20 可執行)**。
-  * **`tokio-rs/axum` (Rust Tokio 旗艦非同步 Web 框架 / Tower)**：20 Commits / 22 檔案，邏輯變更捕獲率 **100.0% (19/19 可執行)**。
-  * **`nestjs/nest` (TypeScript 企業級 IoC / 裝飾器管線)**：20 Commits / 24 檔案，邏輯變更捕獲率 **100.0% (23/23 可執行)**。
-  * **`pmndrs/zustand` (TypeScript 全域狀態 / 閉包不可變性)**：20 Commits / 21 檔案，邏輯變更捕獲率 **100.0% (12/12 可執行)**。
-  * **`redis/go-redis` (Go 高性能連線池 / Pipeline / 超時控制)**：20 Commits / 28 檔案，邏輯變更捕獲率 **100.0% (23/23 可執行)**。
-  * **`zellij-org/zellij` (Rust 終端多工器 / Actor IPC / Pty)**：20 Commits / 36 檔案，邏輯變更捕獲率 **100.0% (33/33 可執行)**。
-  * **`pola-rs/polars` (Rust DataFrame / Arrow / 平行 Rayon)**：20 Commits / 31 檔案，邏輯變更捕獲率 **100.0% (31/31 全滿貫)**。
-  * **`dotnet/efcore` (C# 企業級 ORM / 交易管線 / LINQ)**：20 Commits / 23 檔案，邏輯變更捕獲率 **100.0% (23/23 全滿貫)**。
-  * **`pydantic/pydantic` (Python 資料驗證 / 核心模型裝飾器)**：20 Commits / 22 檔案，邏輯變更捕獲率 **100.0% (19/19 可執行)**。
-  * **`vllm-project/vllm` (Python LLM 推理串流 / PagedAttention)**：20 Commits / 31 檔案，邏輯變更捕獲率 **100.0% (30/30 可執行)**。
-  * **`trpc/trpc` (TypeScript 端到端型別 RPC / Proxy 路由)**：20 Commits / 25 檔案，邏輯變更捕獲率 **100.0% (22/22 可執行)**。
-  * **`vitejs/vite` (TypeScript 現代前端打包管線 / HMR 廣播)**：20 Commits / 22 檔案，邏輯變更捕獲率 **100.0% (20/20 可執行)**。
-  * **`vercel/next.js` (TypeScript 全端 SSR / Server Actions / RSC)**：20 Commits / 27 檔案，邏輯變更捕獲率 **100.0% (22/22 可執行)**。
-  * **`caddyserver/caddy` (Go 雲原生 Web 伺服器 / 自動 TLS / 重載)**：20 Commits / 28 檔案，邏輯變更捕獲率 **100.0% (28/28 全滿貫)**。
-  * **`traefik/traefik` (Go 邊緣路由器 / 動態中介軟體管線)**：20 Commits / 26 檔案，邏輯變更捕獲率 **100.0% (23/23 可執行)**。
-  * **`bevyengine/bevy` (Rust ECS 遊戲引擎 / 資料導向排程器)**：20 Commits / 33 檔案，邏輯變更捕獲率 **100.0% (28/28 可執行)**。
-  * **👑 十大現代軟體架構支柱全滿貫**：
-    1. **TUI 五大語言神滿貫**：Python (`textual`)、TS (`ink`)、Rust (`ratatui`)、Go (`bubbletea`)、C# (`spectre.console`)。
-    2. **跨平台桌面 GUI 與控制項事件路由**：C# (`Avalonia` 視覺樹/邏輯樹、StyledProperty、路由事件隧道冒泡)。
-    3. **前端渲染與微核心響應式基石**：Alpine DSL、Preact VDOM Diff、Vue 3 Proxy Reactivity。
-    4. **現代非同步 Web 路由與中介軟體**：FastAPI (ASGI) + Gin (Radix Tree) + axum (Tower Service / Extractors)。
-    5. **企業級 IoC 依賴注入與裝飾器攔截**：NestJS (Guards / Interceptors / Request-scoped DI)。
-    6. **全域不可變狀態管理與閉包安全**：Zustand (不可變 Store / Persist 競態) + XState (狀態機)。
-    7. **企業級 ORM、交易管線與連線池防護**：EF Core (LINQ 運算式樹 / SQLite 髒連線防護) + go-redis (連線狀態機)。
-    8. **AI 大模型推理串流與資料驗證**：vLLM (PagedAttention / 非同步調度器死鎖防護) + pydantic (核心資料驗證器與模型裝飾器)。
-    9. **現代全端 SSR、Server Actions 與編譯打包**：Next.js (Server Actions 跨端接線) + trpc (端到端型別 RPC) + Vite (外掛生命週期與 HMR)。
-    10. **雲原生邊緣代理與 ECS 遊戲排程**：Caddy (自動 TLS 與連線池) + Traefik (動態路由器) + Bevy (ECS 算子並發排程) + Polars + Zellij + Cobra + ripgrep + bat + fzf。
-  * **三十五項專案總結**：審查 920 檔案、699 Commits，總體捕獲率 **88.9% (818/920)**，**可執行邏輯變更捕獲率達成 100.0% (818/818)**！解析錯誤率 0%！
-  * 完整實戰報告詳見：[reports/dogfooding_benchmark_35_repos.md](file:///d:/AntiGravity/UIA_Coder/reports/dogfooding_benchmark_35_repos.md)。
-
----
-
-## 🗺️ 後續迭代藍圖
-
-1. [x] **整合 Tree-sitter AST 解析與 NetworkX 有向圖**：已於 `uia_coder` 落地，支援現代 Scope Stack 與閉包阻隔消解。
-2. [x] **模組化多語言架構 (Adapter & Registry Pattern)**：將圖論核心與語意適配器徹底解耦，支援依副檔名自動分發。
-3. [x] **支援 6 大主流語言生態 (JavaScript + TypeScript + Python + Rust + Go + C#)**：
-   - JS/TS DOM 閉包與非同步調用鏈。
-   - Python PyQt/Tkinter 槽函式可達性與 UI 阻塞檢測。
-   - Rust 結構體關聯方法、CLI 進入點與 `todo!()`/`panic!()` 危害攔截。
-   - Go 結構體接收器方法、CLI 進入點與 `panic()`/`time.Sleep()` 危害攔截。
-   - C# WPF/WinUI 事件綁定、控制項錨點與 `Thread.Sleep()`/`NotImplementedException` 攔截。
-4. [x] **三十五項開源專案 Dogfooding 實戰驗證 (Todomvc, Textual, Sortable, XState, Ink, HTTPX, Alpine, Ratatui, Bubbletea, Spectre.Console, Cobra, Preact, Vue 3, FastAPI, Gin, ripgrep, fzf, Avalonia, RestSharp, bat, axum, NestJS, Zustand, go-redis, Zellij, Polars, EF Core, pydantic, vLLM, trpc, Vite, Next.js, Caddy, Traefik, Bevy)**：
-   - 橫跨 TUI、桌面 GUI、前端響應式、Web 路由、IoC 依賴注入、狀態閉包、ORM 連線池、AI 推理串流、Server Actions、ECS 遊戲排程、雲原生反向代理與前端打包管線十大領域。
-   - 攻克 Windows Tree-sitter 0.26.0 記憶體隔離與 `TreeCursor` 原生走訪技術（Rust/Go/C# 全面免疫萬級節點 SEH 崩潰）。
-   - 920 檔案可執行邏輯變更捕獲率達 100.0% (818/818)。
-5. [x] **加入 UI 錨點圖切片 (Graph Slicing)**：`forward_slice(anchor_id)` 可從 UI 控制項向下切出受影響的完整因果子圖。
-6. [x] **標準化 Node-Link 序列化**：支援 `to_node_link_data()`，為 MCP Tool 與 Agent 協議提供零成本格式互轉。
-7. [x] **v2 統一互動式雙欄 HTML 儀表板**：支援點擊節點平滑滾動並高亮對應原始碼行號。
-8. [x] **實作 Spec-Driven 規格圖譜驗收介面**：`codemap.py --verify-spec <spec.json> --file <file>`，提供上位 Agent 對 Subagents 交付成果的確定性數學驗收。
-9. [x] **自動化違規診斷與重派修復閉環 (Self-Correction Loop)**：驗收失敗時輸出結構化因果違規報告，上位 Agent 直接退回給責任 Subagent 精準修復。
-9.5. [x] **Subagent 規格異議機制 (Spec Negotiation)**：支援結構化 Spec Objection 回報、AST 防偽查核 (`--verify-objection`)、上位 Agent 裁決、規格圖譜版本化與受影響 Subagents 廣播。
-10. [ ] **封裝為 Agent MCP Tool**：提供給 Claude / Gemini 等 Coding Agent 即時調用圖譜規劃與驗收能力。
-11. [ ] **擴充 Dart (Flutter UI) 與 Java/Kotlin 適配器**。
+### 🗺️ 演進路線圖 (Roadmap)
+- [x] **Phase 1：多語言 AST 因果圖譜引擎**：完成 JS, TS/TSX, Python, Rust, Go, C#, HTML/DOM 共 8 種語法適配器與 35 大開源專案（699 Commits）100% 捕獲率實證。
+- [x] **Phase 2：跨檔案消解與形式化規格閉環**：落地 `WorkspaceGraphBuilder` 跨檔依賴接合、`SpecVerifier` 契約驗收、`--verify-objection` 異議防偽查證、以及 AST 去噪指紋與增量不變量守衛。
+- [x] **Phase 3：雙層規約與反顛簸開發協議**：確立「宏觀因果拓撲 + 節點內嵌 Pseudo-Code」雙層規範，並制定微創手術式補丁與確定性終止協定。
+- [ ] **Phase 4：封裝為原生 MCP Server**：將 `--slice`、`--bundle`、`--verify-spec` 封裝為標準 MCP 工具，供各類 Coding Agent 在對話中直接調用。
+- [ ] **Phase 5：虛擬碼 AST 骨架深度校驗器 (Skeleton Verifier)**：自動比對節點 `pseudo_code` 中的 `TRY/CATCH/FINALLY` 分支映射與實際源碼 AST 結構是否嚴格同構。
