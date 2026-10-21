@@ -102,6 +102,18 @@ sequenceDiagram
    * 所有 Subagents 完成代碼後，上位 Agent 調用 CODE-Map 編譯器將聚合源碼抽取為 `Actual CODE-Map`。
    * 透過 `UIAGraphDiffer` 進行純數學比對。若不符規格或觸發守衛紅牌，上位 Agent **不需要人工介入，直接帶著圖譜違規點將任務退回給責任 Subagent 重新修正**，直到全綠燈放行！
 
+### 🧩 雙層規約架構：為什麼節點中必須內嵌 Pseudo-Code？(Two-Tier Specification)
+
+> 📘 **詳細技術指引**：[《CODE-Map 形式化規格規劃與 Subagent 派發指引：以微觀虛擬碼與宏觀因果圖譜建構雙層合約》](docs/SPEC_DRIVEN_PLANNING_GUIDE.md)
+
+單純的宏觀拓撲圖能保證「函式必定通電被呼叫到」，但無法防禦「函式內部演算法走偏或遺漏兜底分支」。因此，CODE-Map 規範在規劃 Target Graph 時，所有流程與動作節點必須內嵌結構化 **Pseudo-Code 行為合約**：
+
+1. **宏觀因果拓撲 (Macro Topology)**：定義節點間的接線（TRIGGERS, DISPATCHES, GROUNDS_TO），從圖論數學上消除死代碼、孤立函式與閉包阻隔。
+2. **微觀行為合約 (Micro Behavioral Contract)**：在節點 spec 屬性中內嵌演算法虛擬碼、前後置條件（Pre/Post-conditions）以及**「分支到邊的嚴格映射（Branch-to-Edge Mapping）」**：
+   - 虛擬碼中每一個 TRY / CATCH / FINALLY 或 IF / ELSE 分支，必須明確標註對應圖譜中的哪一條出邊（Outgoing Edge）。
+   - 例如：CATCH error ➔ EMIT_EDGE: TRIGGERS ➔ showToast(error)，杜絕吞掉異常的空 catch 區塊。
+3. **AST 骨架級驗收 (Skeleton Verification)**：CODE-Map 不僅驗證呼叫關係，還靜態掃描 AST 是否具備對應的分支結構與狀態復原副作用，達成時空雙維度的嚴密閉環。
+
 ### 🗣️ Subagent 異議機制：規格可被挑戰 (Spec Negotiation)
 
 > **規格圖譜是契約，但不是聖旨。** 前期設計必然存在想錯之處，往往要到實作時才會暴露（瀑布式開發的老教訓）。若閉環只允許「上位 Agent 單向退件」，Subagent 只能硬湊代碼去迎合一份錯誤的規格，最終產出「圖譜全綠、功能錯誤」的結果。
