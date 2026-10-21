@@ -100,13 +100,61 @@ sequenceDiagram
     end
 ```
 
-### 1️⃣ 第一步：雙層規約先行 —— 宏觀拓撲 + 微觀 Pseudo-Code
-> 詳見完整規範：[《CODE-Map 形式化規格規劃與 Subagent 派發指引》](docs/SPEC_DRIVEN_PLANNING_GUIDE.md)
+### 1️⃣ 第一步：雙層規約先行 —— 在函式節點中內嵌 Pseudo-Code 行為合約
+> 📘 詳見完整規範：[《CODE-Map 形式化規格規劃與 Subagent 派發指引》](docs/SPEC_DRIVEN_PLANNING_GUIDE.md)
 
-單純的拓撲圖只能保證「函式被呼叫到」，無法防禦「函式內部演算法走偏或吞掉異常」。因此規劃 `TargetGraph` 時，必須同時定義兩層規約：
+單純的拓撲圖只能保證「函式被呼叫到」，無法防禦「函式內部演算法走偏或吞掉異常」。因此在使用 CODE-Map 進行前置規劃時，上位架構 Agent 必須在 `TargetGraph` 中同時定義**「宏觀接線」與「函式內部 Pseudo-Code」**：
+
+```mermaid
+flowchart TD
+    subgraph Macro["宏觀層：CODE-Map 因果拓撲 (誰呼叫誰)"]
+        Anchor["UI 錨點: #btn-sync"] -->|"TRIGGERS"| Action["函式節點: handleSync()"]
+        Action -->|"DISPATCHES [Success]"| TargetAPI["後端 API: post('/api/sync')"]
+        Action -->|"TRIGGERS [Failure]"| Toast["UI 回饋: showToast(err)"]
+    end
+
+    subgraph Micro["微觀層：在 handleSync() 函式節點內嵌 Pseudo-Code 合約"]
+        direction TB
+        Spec["<b>【函式設計規格：handleSync】</b><br/>• <b>Pre-condition</b>: !state.isSyncing<br/>• <b>Pseudo-Code 演算法骨架</b>:<br/>  1. IF state.isSyncing THEN RETURN<br/>  2. SET state.isSyncing = TRUE<br/>  3. TRY:<br/>       payload = collectDirtyFiles()<br/>       res = AWAIT post('/api/sync', payload)<br/>       EMIT_EDGE ➔ refreshFileTree()<br/>  4. CATCH err:<br/>       EMIT_EDGE ➔ showToast(err.message)<br/>  5. FINALLY:<br/>       SET state.isSyncing = FALSE<br/>• <b>Post-condition</b>: state.isSyncing === false"]
+    end
+
+    Action -.->|"規劃時內嵌於節點 spec"| Micro
+```
+
 - **宏觀因果拓撲 (Macro Topology)**：定義節點間的接線（`TRIGGERS`, `DISPATCHES`, `GROUNDS_TO`），從圖論上消滅入度為 0 的死代碼與閉包阻隔。
-- **微觀行為合約 (Micro Behavioral Contract)**：在流程節點的 `spec` 屬性中內嵌**結構化虛擬碼 (Pseudo-Code)**、前後置條件（Pre/Post-conditions）以及**「分支到邊的嚴格映射（Branch-to-Edge Mapping）」**：
-  - 虛擬碼中每一個 `TRY / CATCH / FINALLY` 或 `IF / ELSE` 分支，必須明確標註對應圖譜中的哪一條出邊（例如：`CATCH error ➔ EMIT_EDGE: TRIGGERS ➔ showToast`），徹底杜絕吞掉錯誤的空 catch 區塊。
+- **微觀函式虛擬碼合約 (In-Node Pseudo-Code Contract)**：在規劃每個函式節點時，直接在節點的 `spec` 屬性放入結構化 `pseudo_code`、前後置條件與**「分支到邊的嚴格映射（Branch-to-Edge Mapping）」**，讓 Subagent 明確知道函式內部的演算法目標與每個分支必須觸發的下游節點：
+
+```json
+{
+  "id": "func:handleSync",
+  "name": "handleSync",
+  "category": "ACTION",
+  "file": "src/controllers/sync.js",
+  "spec": {
+    "summary": "處理使用者點擊同步的非同步流程與異常兜底",
+    "inputs": ["event: ClickEvent", "activeWorkspace: string"],
+    "outputs": ["Promise<SyncResult>"],
+    "pre_conditions": ["activeWorkspace !== null", "!state.isSyncing"],
+    "post_conditions": ["state.isSyncing === false"],
+    "pseudo_code": [
+      "IF state.isSyncing THEN RETURN EARLY",
+      "SET state.isSyncing = TRUE",
+      "TRY:",
+      "  payload = CALL collectDirtyFiles(activeWorkspace)",
+      "  res = AWAIT post('/api/sync', payload)",
+      "  EMIT_EDGE: DISPATCHES -> refreshFileTree(res.data)",
+      "CATCH error:",
+      "  EMIT_EDGE: TRIGGERS -> showToast(error.message)",
+      "FINALLY:",
+      "  SET state.isSyncing = FALSE"
+    ],
+    "branch_to_edge_mapping": {
+      "on_success": "refreshFileTree",
+      "on_catch": "showToast"
+    }
+  }
+}
+```
 
 ### 2️⃣ 第二步：反顛簸協定與微創手術式補丁 (Anti-Thrashing Protocol)
 為了終結 Agent「讀全檔 ➔ 改一點 ➔ 重讀全檔 ➔ 慢速重吐整檔」的顛簸死循環，所有 Agent 必須遵守三大鐵律：
