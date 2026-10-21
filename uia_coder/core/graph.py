@@ -16,6 +16,7 @@ class UIACodeGraph:
 
     CATEGORIES = {
         "UI_CONTROL",       # 按鈕、輸入框、選單項、快捷鍵
+        "DOM_ELEMENT",      # HTML DOM 實體標籤、容器、結構元素
         "EVENT_BINDING",    # 事件綁定、信號槽、onClick
         "FUNCTION_DEF",     # 函式宣告、方法宣告
         "MODULE_STATE",     # 模組頂層常數、設定表、正規表示式對應表
@@ -25,6 +26,8 @@ class UIACodeGraph:
     }
 
     EDGE_TYPES = {
+        "CONTAINS",         # DOM 容器包含關係 (Parent -> Child)
+        "GROUNDS_TO",       # JS UI_CONTROL 錨點 -> DOM_ELEMENT 實體接地
         "WIRES_TO",         # 控制項 -> 事件
         "TRIGGERS",         # 事件 -> 處理函式
         "RESOLVES_TO",      # 呼叫點 -> 函式宣告 (作用域消解)
@@ -36,7 +39,8 @@ class UIACodeGraph:
     EDGE_STATUSES = {
         "VALID",            # 正常通電且作用域可達
         "BLOCKED_SCOPE",    # 作用域阻隔 (閉包囚禁，執行期拋出 ReferenceError / NameError)
-        "BLOCKED_INVARIANT" # 違反安全不變量 (例如阻塞主執行緒、記憶體洩漏風險)
+        "BLOCKED_INVARIANT",  # 違反安全不變量 (例如阻塞主執行緒、記憶體洩漏風險)
+        "BLOCKED_VISIBILITY", # 物理可見性阻隔 (浮層元件被囚禁於 hidden 容器內部)
     }
 
     def __init__(self, name: str = "UIA Semantic Graph"):
@@ -238,6 +242,20 @@ class UIACodeGraph:
                     }
                 else:
                     raw_hazards[key]["count"] += 1
+            elif status == "BLOCKED_VISIBILITY":
+                reported_targets.add(v)
+                base_target = v.split("@")[0].split(":")[-1]
+                key = ("VISIBILITY_VIOLATION", base_target, d.get("detail", ""))
+                if key not in raw_hazards:
+                    raw_hazards[key] = {
+                        "type": "VISIBILITY_VIOLATION",
+                        "source": u,
+                        "target": v,
+                        "detail": d.get("detail", "浮層元件被囚禁於不可見/隱藏父容器內部"),
+                        "count": 1,
+                    }
+                else:
+                    raw_hazards[key]["count"] += 1
 
         # 檢測節點危害屬性 (若該目標節點已在邊上的 BLOCKED_INVARIANT 報告過，則不重複回報)
         for n, d in self.g.nodes(data=True):
@@ -258,6 +276,8 @@ class UIACodeGraph:
 
         scope_errors = list(raw_scope_errors.values())
         hazards = list(raw_hazards.values())
+        for gh in self.g.graph.get("hazards", []):
+            hazards.append(gh)
 
         passed = (len(scope_errors) == 0 and len(hazards) == 0)
         verdict = "🟢 READY_TO_SHIP" if passed else "🔴 BLOCKED_BY_INVARIANTS"
