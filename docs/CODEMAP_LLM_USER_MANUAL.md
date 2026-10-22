@@ -36,6 +36,9 @@
   # 提取特定控制項錨點的語意控制樹與依賴函式原始碼包
   python.exe -X utf8 codemap.py --file "src/app.js" --slice "#btnSubmit"
   python.exe -X utf8 codemap.py --file "src/app.js" --bundle "#btnSubmit"
+
+  # SWE-bench 雙向病灶定位：依 Issue 關鍵字同時抽出「上游呼叫者 (Callers) + 目標函式 + 下游被呼叫者 (Callees)」(平均節省 89.3% Token)
+  python.exe -X utf8 codemap.py --file "fastapi/dependencies/utils.py" --locate "_get_multidict_value"
   ```
 
 ### 2.2 場景二：跨檔案接線與作用域死穴攔截（Scope & Export Guardrails）

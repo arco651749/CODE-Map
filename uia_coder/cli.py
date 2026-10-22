@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--export-json", help="導出 NetworkX Node-Link JSON 檔案路徑")
     parser.add_argument("--slice", help="針對特定 UI 錨點 (Anchor ID) 進行前向圖切片")
     parser.add_argument("--bundle", help="以特定 UI 控制項 (Anchor ID 或 Label) 為起點，提取其波及的全部函式真實原始碼包")
+    parser.add_argument("--locate", help="SWE-bench 雙向病灶定位：依符號關鍵字搜尋節點，同時打包『上游呼叫者 (Callers) + 目標函式 + 下游被呼叫者 (Callees)』源碼")
     parser.add_argument("--check", action="store_true", help="執行形式化不變量守衛檢驗，有違規時返回非 0 狀態碼")
     parser.add_argument("--html", help="導出互動式 HTML 雙欄視覺化儀表板檔案路徑")
     parser.add_argument("--list-languages", action="store_true", help="列出目前所有已支援的程式語言與副檔名")
@@ -132,6 +133,10 @@ def main():
             print("\n" + v_res.to_markdown())
             if not v_res.passed:
                 sys.exit(1)
+            return
+
+        if args.locate:
+            print(graph.locate_symbol_bundle(args.locate))
             return
 
         if args.bundle:

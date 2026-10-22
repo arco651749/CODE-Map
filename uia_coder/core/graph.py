@@ -198,6 +198,92 @@ class UIACodeGraph:
 
         return "\n".join(lines)
 
+    def locate_symbol_bundle(self, query: str) -> str:
+        """
+        SWE-bench 雙向病灶定位器 (Bidirectional Fault Localization Bundle):
+        依符號關鍵字搜尋目標節點，並提取：
+        1. 上游呼叫者 (Upstream Callers / Predecessors)
+        2. 目標病灶節點 (Target Symbol)
+        3. 下游被呼叫者 (Downstream Callees / Successors)
+        連同精確行號與真實源碼打包為零雜訊 Context。
+        """
+        q_lower = query.lower()
+        # 優先尋找精確名稱或方法後綴完全吻合之節點 (避免搜尋 render 時誤抓數十個 render_xxx 測試函式)
+        exact_matched = [
+            n for n, d in self.g.nodes(data=True)
+            if d.get("category") in ("FUNCTION_DEF", "MODULE_STATE", "UI_CONTROL")
+            and d.get("props", {}).get("source_code")
+            and (
+                str(d.get("label", "")).lower() == q_lower
+                or str(d.get("label", "")).lower().endswith((f".{q_lower}", f"::{q_lower}"))
+            )
+        ]
+        matched = exact_matched if exact_matched else [
+            n for n, d in self.g.nodes(data=True)
+            if d.get("category") in ("FUNCTION_DEF", "MODULE_STATE", "UI_CONTROL")
+            and (q_lower in str(d.get("label", "")).lower() or q_lower in n.lower())
+            and d.get("props", {}).get("source_code")
+        ]
+        if not matched:
+            return f"❌ 找不到符合關鍵字 '{query}' 的可執行符號節點。"
+
+        lines = [f"# 🎯 CODE-Map SWE-bench 雙向病灶定位包 (Query: `{query}`)", ""]
+        ordered_nodes = []
+
+        for m in matched:
+            m_data = self.g.nodes[m]
+            m_label = m_data.get("label", m)
+            callers = [u for u in self.g.predecessors(m) if self.g.nodes[u].get("props", {}).get("source_code")]
+            callees = [v for v in self.g.successors(m) if self.g.nodes[v].get("props", {}).get("source_code")]
+
+            lines.append(f"## 🧭 病灶拓撲視圖: `{m_label}`")
+            if callers:
+                for c in callers:
+                    c_lbl = self.g.nodes[c].get("label", c)
+                    lines.append(f"  • ⬆️ [上游呼叫者 Caller] `{c_lbl}` ──> 🎯 **`{m_label}`**")
+            else:
+                lines.append(f"  • ⬆️ [上游呼叫者 Caller] _(頂層入口或外部路由觸發)_ ──> 🎯 **`{m_label}`**")
+
+            for cal in callees:
+                cal_lbl = self.g.nodes[cal].get("label", cal)
+                ed = self.g.get_edge_data(m, cal) or {}
+                g_str = f" [guard: {ed.get('guard_expr')}]" if ed.get("is_conditional") else ""
+                lines.append(f"  • ⬇️ [下游被調用 Callee] 🎯 **`{m_label}`** ──[{ed.get('edge_type', 'CALLS')}{g_str}]──> `{cal_lbl}`")
+            lines.append("")
+
+            # 過濾檔案內嵌之龐大單元測試函式 (如 Rust mod tests)，優先保留生產代碼上下游鄰居
+            prod_callers = [
+                c for c in callers
+                if not any(kw in str(self.g.nodes[c].get("label", "")).lower() for kw in ("test_", "_test", "does_not_panic", "_barchart_"))
+            ][:4]
+            prod_callees = callees[:4]
+            for n in [m] + prod_callers + prod_callees:
+                if n not in ordered_nodes:
+                    ordered_nodes.append(n)
+
+        lines.append("---")
+        lines.append("## 📦 關聯節點精確源碼切片 (Surgical Source Slices)")
+        lines.append("")
+        seen_src = set()
+        for nid in ordered_nodes:
+            ndata = self.g.nodes.get(nid, {})
+            props = ndata.get("props", {})
+            src = props.get("source_code", "").strip()
+            if not src or src in seen_src:
+                continue
+            seen_src.add(src)
+            role = "🎯 [目標病灶 TARGET]" if nid in matched else "🔗 [上下游關聯 NEIGHBOR]"
+            sig = props.get("signature", ndata.get("label", nid))
+            f_scope = ndata.get("scope", {})
+            l_start = props.get("line_start", f_scope.get("line", "?"))
+            l_end = props.get("line_end", "?")
+            lines.append(f"### {role} `{sig}` ({f_scope.get('file', '')}: L{l_start}~L{l_end})")
+            lines.append("```")
+            lines.append(src)
+            lines.append("```\n")
+
+        return "\n".join(lines)
+
     def check_invariants(self) -> Dict[str, Any]:
         """
         形式化不變量守衛驗收：
