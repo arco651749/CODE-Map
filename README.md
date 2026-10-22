@@ -5,7 +5,8 @@
 > **架構演進**：從 `AST (零件盤點)` ➔ `Call / DOM Graph (跨檔接線消解)` ➔ `CODE-Map 語意控制樹 (時空合一驗收)`  
 >
 > 📄 **權威技術白皮書**：[《為什麼軟體工程需要 CODE-Map？—— 三十五項頂級開源專案、699 個真實修復 Commits 的實戰驗證與形式化因果圖論白皮書》](docs/why_code_map_matters_35_repos_whitepaper.md)  
-> 📘 **規格規劃指引**：[《CODE-Map 形式化規格規劃與 Subagent 派發指引：以微觀虛擬碼與宏觀因果圖譜建構雙層合約》](docs/SPEC_DRIVEN_PLANNING_GUIDE.md)
+> 📘 **規格規劃指引**：[《CODE-Map 形式化規格規劃與 Subagent 派發指引：以微觀虛擬碼與宏觀因果圖譜建構雙層合約》](docs/SPEC_DRIVEN_PLANNING_GUIDE.md)  
+> 🧭 **實戰使用手冊與邊界指南**：[《CODE-Map 實戰使用手冊與 AI Agent 協作邊界指南：可用領域、物理盲區與 LLM 接手標準程序》](docs/CODEMAP_LLM_USER_MANUAL.md)
 
 ---
 
@@ -284,6 +285,7 @@ d:\AntiGravity\UIA_Coder\
 │   │   └── html_reporter.py               # 雙欄互動式 HTML 語意控制樹儀表板
 │   └── cli.py                             # 🚀 命令列參數路由與功能整合
 ├── docs/                                  # 📚 架構設計規範與理論白皮書
+│   ├── CODEMAP_LLM_USER_MANUAL.md         # 🧭 實戰使用手冊：可用領域、物理盲區與 LLM 協作 SOP
 │   ├── SPEC_DRIVEN_PLANNING_GUIDE.md      # 雙層規約架構 (Macro Topology + Micro Pseudo-Code) 實戰指南
 │   ├── CODEMAP_NEXT_PHASE_TODO.md         # 靜態分析引擎進階演進與紅隊審計修復清單
 │   └── why_code_map_matters_35_repos_whitepaper.md # 35 專案 699 Commits 形式化因果圖論白皮書
