@@ -217,6 +217,9 @@ python.exe -X utf8 codemap.py --dir "uia_coder" --check
 python.exe -X utf8 codemap.py --file "legacy/workspaceFileTree.js" --slice "#btnDelete"
 python.exe -X utf8 codemap.py --file "legacy/workspaceFileTree.js" --bundle "#btnDelete"
 
+# 4b. SWE-bench 雙向病灶定位：依 Issue 關鍵字同時抽出「上游呼叫者 + 目標病灶 + 下游被呼叫者」(平均節省 89.3% Token)
+python.exe -X utf8 codemap.py --file "test_repos/fastapi/fastapi/dependencies/utils.py" --locate "_get_multidict_value"
+
 # 5. 上位規格契約偏序驗收 (比對 Target Spec 與實際代碼是否 100% 通電吻合)
 python.exe -X utf8 codemap.py --file "legacy/workspaceFileTree.js" --verify-spec "spec.json"
 
@@ -293,7 +296,8 @@ d:\AntiGravity\UIA_Coder\
 │   ├── test_graph_engine.py               # 多語言圖譜構建、差分與不變量守衛測試
 │   ├── test_html_adapter.py               # HTML DOM 階層、未閉合標籤與隱藏屬性級聯測試
 │   ├── test_next_phase_features.py        # 跨檔依賴消解、SpecVerifier 偏序驗收與異議防偽測試
-│   └── test_workspace_commits.py          # 真實 Git 歷史提交語意差分驗收測試
+│   ├── test_workspace_commits.py          # 真實 Git 歷史提交語意差分驗收測試
+│   └── test_swebench_challenge.py         # 🏆 跨 6 大語言 SWE-bench 雙向病灶定位與 Token 壓縮挑戰賽
 ├── tools/                                 # 🛠️ 大規模開源專案基準探勘與稽核工具群
 └── reports/                               # 📈 基準測試報告與互動式 HTML 視覺化產出
 ```
