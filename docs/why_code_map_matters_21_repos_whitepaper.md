@@ -264,7 +264,7 @@ sequenceDiagram
     participant Worker1 as 🛠️ Subagent A (函式單元實作)
     participant Worker2 as ⚡ Subagent B (事件流程接線)
     participant Engine as 🌲 CODE-Map 圖譜編譯器
-    participant Differ as ⚖️ UIAGraphDiffer (形式化驗收裁判)
+    participant Differ as ⚖️ CodeMapDiffer (形式化驗收裁判)
 
     Boss->>Spec: 1. 規劃架構因果圖譜 (UI Anchor, Event, Call Chain, Invariants)
     Boss->>Worker1: 2. 派發單元契約 (實作 RPC 函式，規範為 async)

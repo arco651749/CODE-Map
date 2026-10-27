@@ -28,7 +28,7 @@
 * **宣告式事件雜湊盲區**：Backbone、Spine 與 Marionette 採用宣告式 `events: { "click .destroy": "remove", "dblclick label": "edit" }`，傳統 AST 視為普通 Object 字面量，未與 UI 控制項接線。
 
 ### 2. 適配器進化與修復
-* 擴充 [javascript_adapter.py](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/javascript_adapter.py)：
+* 擴充 [javascript_adapter.py](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/javascript_adapter.py)：
   * 支援 `prototype.xxx = function` 與 `this.xxx = function` 賦值方法宣告。
   * 支援物件字面量方法 `method() {}` 與 `method: function() {}`。
   * 支援 Backbone/Spine `events: { ... }` 雜湊解析，自動投影為 `UI_CONTROL` ➔ `EVENT_BINDING` ➔ `TRIGGERS`。
@@ -55,7 +55,7 @@
 * **非同步 Worker 屬性丟失**：`@work` 裝飾的背景工作常式未被特別標記。
 
 ### 2. 適配器進化與修復
-* 擴充 [python_adapter.py](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/python_adapter.py)：
+* 擴充 [python_adapter.py](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/python_adapter.py)：
   * 支援 `decorated_definition` 語法節點，抽取 `@on(Event, selector)` 並建立 UI 控制項因果圖。
   * 支援 `on_xxx_yyy` 命名約定自動消解為事件綁定。
   * 標註 `@work` 為背景 Worker，為後續跨執行緒安全檢驗奠定基礎。

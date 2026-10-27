@@ -2,7 +2,7 @@
 
 > **評估範疇**：
 > 針對 GitHub 上 JavaScript、TypeScript、Python 三大主流生態中 7 個極具代表性的開源專案，各自回溯 20 個真實「流程/事件/狀態機/非同步/生命週期/閉包」修復 Commits。
-> 檢驗 CODE-Map 控制樹建構、AST 語意推導、因果連線以及語意差分引擎（`UIAGraphDiffer`）的捕獲精度與雜訊比（SNR）。
+> 檢驗 CODE-Map 控制樹建構、AST 語意推導、因果連線以及語意差分引擎（`CodeMapDiffer`）的捕獲精度與雜訊比（SNR）。
 
 ---
 
@@ -30,7 +30,7 @@
 * **初始盲區 (捕獲率僅 62.2%)**：
   * 現代 React 函式型元件與工具函式幾乎全面採用 `const Box = forwardRef(...)`、`export const renderToString = (...) => ...` 與 `const memoComponent = memo(...)`。
   * 舊版 TypeScript 適配器僅認 `function foo() {}` 與 Class 宣告，導致所有箭頭函式宣告和高階元件（HOC）全部退化為未命名作用域，內部邏輯修改無法歸屬至具名節點。
-* **適配器進化 ([typescript_adapter.py](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/typescript_adapter.py))**：
+* **適配器進化 ([typescript_adapter.py](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/typescript_adapter.py))**：
   * 新增統一命名推導機制 `_infer_function_name`：
     * 嗅探 `variable_declarator` 右側的 `arrow_function`、`function_expression`。
     * 穿透 `call_expression`（`forwardRef`、`memo`、`React.forwardRef`）將變數名稱注入至內部回呼函式。
@@ -41,7 +41,7 @@
 * **初始盲區 (捕獲率 77.3%)**：
   * Alpine 透過 DSL 註冊指令：`directive('model', (el, ...) => { ... })` 或 `Alpine.directive('sort', ...)`。
   * 指令回呼函式為傳遞給 `directive` 的匿名箭頭函式，未被視為一級流程節點。
-* **適配器進化 ([javascript_adapter.py](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/javascript_adapter.py))**：
+* **適配器進化 ([javascript_adapter.py](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/javascript_adapter.py))**：
   * 在 `_infer_function_name` 中增加指令與插件特徵識別：
     * 偵測 `directive`、`magic`、`plugin` 等調用參數，自動提取指令標籤（如 `directive:model`、`directive:sort`）作為 `FUNCTION_DEF` 節點。
     * 同步推導函式內部賦值（如 `let getValue = () => ...`）。

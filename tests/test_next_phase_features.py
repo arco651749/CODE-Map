@@ -10,10 +10,10 @@ if project_root not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from uia_coder.adapters import get_adapter_for_file
-from uia_coder.core.differ import UIAGraphDiffer
-from uia_coder.core.spec_verifier import SpecVerifier, SpecContract, verify_objection
-from uia_coder.core.workspace_graph import WorkspaceGraphBuilder
+from code_map.adapters import get_adapter_for_file
+from code_map.core.differ import CodeMapDiffer
+from code_map.core.spec_verifier import SpecVerifier, SpecContract, verify_objection
+from code_map.core.workspace_graph import WorkspaceGraphBuilder
 
 
 def test_a_same_name_no_collision():
@@ -60,7 +60,7 @@ def test_a_same_name_no_collision():
     assert funcs_b.count("handleClick") == 2, f"圖中必須同時保留兩個 handleClick 節點，實際: {funcs_b}"
 
     # 執行圖差分
-    diff_res = UIAGraphDiffer.diff_graphs(g_before, g_after)
+    diff_res = CodeMapDiffer.diff_graphs(g_before, g_after)
 
     # 斷言：functions_modified 必須「精準只捕獲被修改的 UserModal 及其內部 handleClick」，ItemCard 不受影響
     modified_cids = [f["canonical_id"] for f in diff_res.functions_modified]

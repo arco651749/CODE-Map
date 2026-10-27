@@ -6,8 +6,8 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 import networkx as nx
-from uia_coder.adapters import get_adapter_for_file
-from uia_coder.core.graph import UIACodeGraph
+from code_map.adapters import get_adapter_for_file
+from code_map.core.graph import CodeMapGraph
 
 
 class WorkspaceGraphBuilder:
@@ -57,12 +57,12 @@ class WorkspaceGraphBuilder:
         cls,
         file_paths: List[str],
         root_dir: str = ".",
-    ) -> UIACodeGraph:
+    ) -> CodeMapGraph:
         """
-        聯合解析多個源碼檔案並拼接為一張統一的 Workspace UIACodeGraph
+        聯合解析多個源碼檔案並拼接為一張統一的 Workspace CodeMapGraph
         """
-        merged_graph = UIACodeGraph(name="Workspace Multi-File Unified Graph")
-        file_graphs: Dict[str, UIACodeGraph] = {}
+        merged_graph = CodeMapGraph(name="Workspace Multi-File Unified Graph")
+        file_graphs: Dict[str, CodeMapGraph] = {}
         normalized_paths: List[str] = []
 
         # Pass 1: 單檔解析與圖結構匯入
@@ -164,9 +164,9 @@ class WorkspaceGraphBuilder:
         return merged_graph
 
     @classmethod
-    def build_from_dir(cls, dir_path: str, extensions: Optional[Set[str]] = None) -> UIACodeGraph:
+    def build_from_dir(cls, dir_path: str, extensions: Optional[Set[str]] = None) -> CodeMapGraph:
         """遍歷目錄下所有支援的原始碼檔案並聯合建圖"""
-        from uia_coder.adapters import AdapterRegistry
+        from code_map.adapters import AdapterRegistry
         valid_exts = extensions or set(AdapterRegistry.get_registry().keys())
 
         collected_files = []

@@ -3,7 +3,7 @@
 
 > **評估範疇**：
 > 針對 GitHub 上 **JavaScript、TypeScript、Python、Rust、Go、C#** 六大主流生態中 11 個極具代表性的開源專案，各自回溯 20 個真實「流程 / 事件 / 狀態機 / 非同步 / 生命週期 / 閉包 / 併發 / 緩衝區繪製 / 命令樹分發」修復 Commits。
-> 檢驗 CODE-Map 控制樹建構、AST 語意推導、因果連線以及語意差分引擎（`UIAGraphDiffer`）的捕獲精度、雜訊比（SNR）與跨語言穩定性。
+> 檢驗 CODE-Map 控制樹建構、AST 語意推導、因果連線以及語意差分引擎（`CodeMapDiffer`）的捕獲精度、雜訊比（SNR）與跨語言穩定性。
 
 ---
 
@@ -48,7 +48,7 @@ CODE-Map 成功在**全球五大主流程式語言之頂級 TUI 框架**上完�
 
 在引入大型 C# 檔案（如 `AnsiWriter.cs` 34 KB、`TableMeasurer.cs` 等萬級 AST 節點）時，原始 C# 適配器因遞迴 `node.children` 與直接調用 `node.text` 觸發了 Windows 64-bit 下的 C 層 Access Violation。
 
-本輪研發將 [`csharp_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/csharp_adapter.py) 同步升級至與 Rust、Go 相同的極限安全架構：
+本輪研發將 [`csharp_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/csharp_adapter.py) 同步升級至與 Rust、Go 相同的極限安全架構：
 1. **生命週期隔離**：在 Builder 局部作用域持久保留 `source_bytes`，杜絕臨時 bytes 記憶體被 PyMalloc 覆寫所造成的懸空指標。
 2. **零複製位元組切片**：全面淘汰 `node.text`，改採 `source_bytes[node.start_byte:node.end_byte].decode("utf-8", errors="replace")`。
 3. **原生 `TreeCursor` 雙階段迭代走訪**：

@@ -5,7 +5,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 # 1. Fix C# Adapter
-cs_path = Path("d:/AntiGravity/UIA_Coder/uia_coder/adapters/csharp_adapter.py")
+cs_path = Path("d:/AntiGravity/UIA_Coder/code_map/adapters/csharp_adapter.py")
 cs_text = cs_path.read_text(encoding="utf-8").replace("\r\n", "\n")
 
 dup_cs_block = '''            elif ntype in ("field_declaration", "constant_declaration"):
@@ -61,7 +61,7 @@ cs_path.write_text(cs_text, encoding="utf-8")
 print("Fixed csharp_adapter.py, parts:", len(parts))
 
 # 2. Fix Rust Adapter
-rust_path = Path("d:/AntiGravity/UIA_Coder/uia_coder/adapters/rust_adapter.py")
+rust_path = Path("d:/AntiGravity/UIA_Coder/code_map/adapters/rust_adapter.py")
 rust_text = rust_path.read_text(encoding="utf-8").replace("\r\n", "\n")
 
 old_rust_props = '''                            "is_async": is_async,
@@ -103,7 +103,7 @@ rust_path.write_text(rust_text, encoding="utf-8")
 print("Fixed rust_adapter.py, parts:", len(r_parts))
 
 # 3. Fix Go Adapter
-go_path = Path("d:/AntiGravity/UIA_Coder/uia_coder/adapters/go_adapter.py")
+go_path = Path("d:/AntiGravity/UIA_Coder/code_map/adapters/go_adapter.py")
 go_text = go_path.read_text(encoding="utf-8").replace("\r\n", "\n")
 
 dup_go_block = '''            elif ntype in ("const_declaration", "var_declaration"):

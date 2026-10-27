@@ -6,10 +6,10 @@ import sys
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from uia_coder.adapters import AdapterRegistry, get_adapter_for_file
-from uia_coder.core.differ import UIAGraphDiffer
-from uia_coder.core.spec_verifier import SpecVerifier, verify_objection
-from uia_coder.core.workspace_graph import WorkspaceGraphBuilder
+from code_map.adapters import AdapterRegistry, get_adapter_for_file
+from code_map.core.differ import CodeMapDiffer
+from code_map.core.spec_verifier import SpecVerifier, verify_objection
+from code_map.core.workspace_graph import WorkspaceGraphBuilder
 
 
 def main():
@@ -39,7 +39,7 @@ def main():
     args = parser.parse_args()
 
     if args.list_languages:
-        print("🌲 UIA-Coder 目前支援之程式語言：")
+        print("🌲 CODE-Map 目前支援之程式語言：")
         for item in AdapterRegistry.list_supported_languages():
             print(f"  • {item['language']:12} (副檔名: {item['extensions']})")
         return
@@ -80,7 +80,7 @@ def main():
         g_b = adapter_b.parse_and_build(code_b, file_path=f_before)
         g_a = adapter_a.parse_and_build(code_a, file_path=f_after)
 
-        diff_res = UIAGraphDiffer.diff_graphs(g_b, g_a)
+        diff_res = CodeMapDiffer.diff_graphs(g_b, g_a)
         print("\n" + diff_res.to_diff_markdown())
 
         if args.check and not diff_res.passed:
@@ -90,7 +90,7 @@ def main():
     # 2. Git 歷史語意差分
     if args.git_diff and args.file:
         print(f"🔍 正在從 Git 抽取歷史比對: [{args.file}] (範圍: {args.git_diff})...")
-        diff_res = UIAGraphDiffer.diff_git_file(
+        diff_res = CodeMapDiffer.diff_git_file(
             repo_path=args.repo,
             file_path=args.file,
             diff_range=args.git_diff
@@ -167,7 +167,7 @@ def main():
             print(f"\n📦 Node-Link JSON 已導出至: {args.export_json}")
 
         if args.html and args.file:
-            from uia_coder.reporters.html_reporter import HTMLDashboardReporter
+            from code_map.reporters.html_reporter import HTMLDashboardReporter
             reporter = HTMLDashboardReporter()
             out_path = reporter.generate(graph, args.html, file_path=args.file)
             print(f"\n🌲 [HTML 雙欄因果儀表板已輸出至]: {out_path}")
@@ -175,7 +175,7 @@ def main():
         if args.check and not inv["passed"]:
             sys.exit(1)
     else:
-        print("UIA-Coder 行為語意圖譜引擎已就緒！請使用 --file <檔案>、--files <A> <B>、--verify-spec <契約> 或 --diff-files <A> <B>。")
+        print("CODE-Map 行為語意圖譜引擎已就緒！請使用 --file <檔案>、--files <A> <B>、--verify-spec <契約> 或 --diff-files <A> <B>。")
 
 
 if __name__ == "__main__":

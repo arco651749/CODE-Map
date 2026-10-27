@@ -2,11 +2,11 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from tree_sitter import Language, Node, Parser
 import tree_sitter_python as tspy
 
-from uia_coder.core.base_adapter import BaseUIAGraphBuilder
-from uia_coder.core.graph import UIACodeGraph
+from code_map.core.base_adapter import BaseCodeMapBuilder
+from code_map.core.graph import CodeMapGraph
 
 
-class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
+class PythonCodeMapBuilder(BaseCodeMapBuilder):
     """
     基於 Tree-sitter 的 Python 語意控制樹建構器
     追蹤 Python 函式作用域、PyQt/PySide 信號槽、Tkinter 綁定與主執行緒阻塞危害 (time.sleep)。
@@ -24,9 +24,9 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
         self.language = Language(tspy.language())
         self.parser = Parser(self.language)
 
-    def parse_and_build(self, source_code: str, file_path: str = "app.py") -> UIACodeGraph:
+    def parse_and_build(self, source_code: str, file_path: str = "app.py") -> CodeMapGraph:
         tree = self.parser.parse(bytes(source_code, "utf-8"))
-        graph = UIACodeGraph(name=f"Graph of {file_path}")
+        graph = CodeMapGraph(name=f"Graph of {file_path}")
 
         scopes: Dict[str, Dict[str, Any]] = {
             "scope:global": {
@@ -93,7 +93,7 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
         scopes: Dict[str, Dict[str, Any]],
         code: str,
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
     ):
         next_scope_id = current_scope_id
 
@@ -198,7 +198,7 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
         scopes: Dict[str, Dict[str, Any]],
         code: str,
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
     ):
         next_scope_id = current_scope_id
 
@@ -323,7 +323,7 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
         scope_id: str,
         scopes: Dict[str, Dict[str, Any]],
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
     ):
         """解析 Textual 的 @on(...) 裝飾器與 on_button_pressed 等約定事件處理常式"""
         line = node.start_point[0] + 1
@@ -427,7 +427,7 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
         current_scope_id: str,
         scopes: Dict[str, Dict[str, Any]],
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
     ):
         # 拆解 btn.clicked.connect(...)
         # obj_node 為 btn.clicked
@@ -509,7 +509,7 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
         scopes: Dict[str, Dict[str, Any]],
         file_path: str,
         line: int,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
         is_direct_trigger: bool = False,
         flow_type: str = "SYNC",
     ):
@@ -590,7 +590,7 @@ class PythonUIAGraphBuilder(BaseUIAGraphBuilder):
                         detail="引用全域或模組外部函式"
                     )
 
-    def _find_enclosing_node_id(self, scope_id: str, graph: UIACodeGraph) -> Optional[str]:
+    def _find_enclosing_node_id(self, scope_id: str, graph: CodeMapGraph) -> Optional[str]:
         for n, d in graph.g.nodes(data=True):
             props = d.get("props", {})
             scope = d.get("scope", {})

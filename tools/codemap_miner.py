@@ -13,8 +13,8 @@ if project_root not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from uia_coder.adapters import AdapterRegistry, get_adapter_for_file
-from uia_coder.core.differ import UIAGraphDiffer
+from code_map.adapters import AdapterRegistry, get_adapter_for_file
+from code_map.core.differ import CodeMapDiffer
 
 
 class CodeMapMiner:
@@ -93,7 +93,7 @@ class CodeMapMiner:
         for rel_file in changed_files:
             full_path = os.path.join(self.repo_path, rel_file)
             try:
-                diff_res = UIAGraphDiffer.diff_git_file(
+                diff_res = CodeMapDiffer.diff_git_file(
                     repo_path=self.repo_path,
                     file_path=full_path,
                     diff_range=f"{commit_hash}~1",

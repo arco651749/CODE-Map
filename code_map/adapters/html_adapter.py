@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Optional, Set
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from uia_coder.core.base_adapter import BaseUIAGraphBuilder
-from uia_coder.core.graph import UIACodeGraph
+from code_map.core.base_adapter import BaseCodeMapBuilder
+from code_map.core.graph import CodeMapGraph
 
 
 class _DOMTreeParser(HTMLParser):
@@ -35,7 +35,7 @@ class _DOMTreeParser(HTMLParser):
         "confirm-dialog", "modal-overlay", "popup-overlay"
     }
 
-    def __init__(self, file_path: str, graph: UIACodeGraph):
+    def __init__(self, file_path: str, graph: CodeMapGraph):
         super().__init__()
         self.file_path = file_path
         self.graph = graph
@@ -114,7 +114,7 @@ class _DOMTreeParser(HTMLParser):
         elif tag_lower == "link" and attr_dict.get("rel") == "stylesheet" and "href" in attr_dict:
             self.stylesheets.append({"href": attr_dict["href"], "line": line, "col": col})
 
-        # 新增至 UIACodeGraph
+        # 新增至 CodeMapGraph
         scope = {
             "file": self.file_path,
             "line": line,
@@ -243,7 +243,7 @@ class _DOMTreeParser(HTMLParser):
                 })
 
 
-class HTMLUIAGraphBuilder(BaseUIAGraphBuilder):
+class HTMLCodeMapBuilder(BaseCodeMapBuilder):
     """
     基於 DOM 拓樸樹的 HTML 語意控制圖建構器
     提供實體 DOM 元素建模、容器嵌套包含關係、標籤閉合平衡與物理可見性阻隔守衛。
@@ -257,8 +257,8 @@ class HTMLUIAGraphBuilder(BaseUIAGraphBuilder):
     def language_name(self) -> str:
         return "HTML"
 
-    def parse_and_build(self, source_code: str, file_path: str = "index.html") -> UIACodeGraph:
-        graph = UIACodeGraph(name=f"DOM Graph of {file_path}")
+    def parse_and_build(self, source_code: str, file_path: str = "index.html") -> CodeMapGraph:
+        graph = CodeMapGraph(name=f"DOM Graph of {file_path}")
         parser = _DOMTreeParser(file_path=file_path, graph=graph)
         try:
             parser.feed(source_code)

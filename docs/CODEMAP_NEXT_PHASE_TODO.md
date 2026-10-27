@@ -26,12 +26,12 @@
 
 ### 1. 問題根因定位 (Root Cause)
 * **檔案位置**：
-  * [`uia_coder/adapters/javascript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/javascript_adapter.py#L287-L348)
-  * [`uia_coder/adapters/typescript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/typescript_adapter.py)
+  * [`code_map/adapters/javascript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/javascript_adapter.py#L287-L348)
+  * [`code_map/adapters/typescript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/typescript_adapter.py)
 * **Bug 解剖**：
   1. 在階段 1 `_collect_scopes_and_functions` (L287~L348) 走訪 `assignment_expression`（例如 `Sortable.prototype = { ... }` 或 `_onDragStart = function() {}`）時，建立了 `new_scope_id = f"scope:{method_name}@{file_path}:L{start_line}C{start_col}"`，且 `scopes[new_scope_id]` 的字典有時漏設 `"parent": current_scope_id`（見 L306~L312、L361~L367，**漏寫了 `"parent": current_scope_id`！**）。
   2. 在階段 2 `_wire_ui_and_calls` (L418~L440) 中，沒有 `assignment_expression` 的對應 Scope 切換分支，導致階段 2 查詢 `scopes.get(curr, {}).get("parent")` 時拿到 `None`，作用域向上查找鏈當場斷裂！
-  3. 當向上查找失敗後，程式進入 [`javascript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/javascript_adapter.py#L824-L846) 的 `else` 分支掃描全表 `scopes.items()`，把明明定義在 `scope:global`（頂層模組作用域，對檔案內所有函式 100% 可達）的私有輔助函式（如 `_dispatchEvent`, `pluginEvent`, `closest`, `enqueueRender`）當成 `isolated_def`，印出矛盾的錯誤訊息：
+  3. 當向上查找失敗後，程式進入 [`javascript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/javascript_adapter.py#L824-L846) 的 `else` 分支掃描全表 `scopes.items()`，把明明定義在 `scope:global`（頂層模組作用域，對檔案內所有函式 100% 可達）的私有輔助函式（如 `_dispatchEvent`, `pluginEvent`, `closest`, `enqueueRender`）當成 `isolated_def`，印出矛盾的錯誤訊息：
      `💥 作用域阻隔: 函式 'pluginEvent' 被深鎖在內部閉包 (scope:global)，外部無法調用！`
 
 ### 2. 修改規格 (Implementation Spec)
@@ -48,15 +48,15 @@
 
 ### 1. 問題根因定位 (Root Cause)
 * **檔案位置**：
-  * [`uia_coder/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/differ.py#L355-L378)
-  * [`uia_coder/core/base_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/base_adapter.py)
+  * [`code_map/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/code_map/core/differ.py#L355-L378)
+  * [`code_map/core/base_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/core/base_adapter.py)
 * **Bug 解剖**：
   `differ.py` 第 364~366 行直接用 `src_b != src_a`（原始碼字串比對）判定函式是否發生實作變更。這導致：
   * `Caddy` Commit #03 (`1619352f`) 在 3 個 `.go` 檔案的 `switch` 前各加了一行 `//exhaustive:ignore` 註釋，被算進 `BODY_LEVEL_SEMANTIC_DELTA` (`ΔFuncs: 1`)。
   * `vLLM` Commit #02 (`143ee3b4`) 在 `_validate_step5_dsa_attention_contract` 僅修改參數型別標註 `alibi_slopes: list[float] | torch.Tensor | None`，也被算進 `BODY_LEVEL_SEMANTIC_DELTA`。
 
 ### 2. 修改規格 (Implementation Spec)
-1. **在 `BaseUIAGraphBuilder` (`uia_coder/core/base_adapter.py`) 新增 `compute_executable_fingerprint(node: Any) -> str`**：
+1. **在 `BaseCodeMapBuilder` (`code_map/core/base_adapter.py`) 新增 `compute_executable_fingerprint(node: Any) -> str`**：
    * 撰寫一個遞迴或 Stack 走訪 Tree-sitter `node` 的輔助方法，收集所有葉節點（Leaf Nodes，`len(curr.children) == 0`）的 Token 文字，但**跳過（Skip）以下非執行語意子樹**：
      * 節點 `type` 包含 `"comment"`（如 `comment`, `line_comment`, `block_comment`）。
      * 純型別標註節點：`type` 為 `"type_annotation"`, `"type_arguments"`, `"type_parameters"`, `"type_parameter"`, `"return_type"`, `"generic_type"`，或父節點欄位為 `type`（如 Python `typed_parameter` / `typed_default_parameter` 的 `type` 子節點）。
@@ -64,7 +64,7 @@
    * 將收集到的可執行葉節點 Token 以空白串接並計算 SHA-256 或正規化字串，存入函式節點 `props["executable_fingerprint"]`。
 2. **在 6 大語言 Adapter 建立 `FUNCTION_DEF` 節點時**：
    呼叫 `self.compute_executable_fingerprint(func_node)` 並寫入 `props["executable_fingerprint"]`。
-3. **在 `UIAGraphDiffer.diff_graphs` (`uia_coder/core/differ.py` L364~L366)**：
+3. **在 `CodeMapDiffer.diff_graphs` (`code_map/core/differ.py` L364~L366)**：
    ```python
    fp_b = props_b.get("executable_fingerprint")
    fp_a = props_a.get("executable_fingerprint")
@@ -79,17 +79,17 @@
 
 ### 1. 問題根因定位 (Root Cause)
 * **檔案位置**：
-  * [`uia_coder/core/graph.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/graph.py#L196-L251)
-  * [`uia_coder/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/differ.py#L98-L164)
+  * [`code_map/core/graph.py`](file:///d:/AntiGravity/UIA_Coder/code_map/core/graph.py#L196-L251)
+  * [`code_map/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/code_map/core/differ.py#L98-L164)
 * **Bug 解剖**：
   1. `graph.py` 的 `check_invariants()` 在遍歷邊與節點時未去重，且對於 `panic()` 既在邊上觸發一次 `INVARIANT_VIOLATION`（`呼叫了執行期恐慌中斷常式: panic()`），又在節點上因為 `is_blocking: True` 觸發一次 `BLOCKING_API`（`使用了同步阻塞 API (panic())`），導致 Caddy 單一檔案印出 20 行重複警告。
-  2. `differ.py` 的 `UIAGraphDiffResult.passed` 直接回傳 `self.invariants_after["passed"]`。如果一個舊檔案原本就有 `panic()`，任何修改該檔案的 Commit 都會被無差別攔截為 `🔴 BLOCKED_BY_INVARIANTS`。
+  2. `differ.py` 的 `CodeMapDiffResult.passed` 直接回傳 `self.invariants_after["passed"]`。如果一個舊檔案原本就有 `panic()`，任何修改該檔案的 Commit 都會被無差別攔截為 `🔴 BLOCKED_BY_INVARIANTS`。
 
 ### 2. 修改規格 (Implementation Spec)
 1. **在 `graph.py` 的 `check_invariants()` 進行去重與分類修正**：
    * 若節點已在邊的 `BLOCKED_INVARIANT` 中被報告過，不再於節點迴圈重複報告第二次；或針對 `panic()` 將其 `props["is_blocking"]` 改為 `props["is_abrupt_exit"] = True`，避免同一顆 `panic()` 節點產生兩條不同名目的警告。
    * 對 `scope_errors` 與 `hazards` 以 `(item.get("caller", ""), item.get("target", item.get("label", "")), item.get("detail", ""))` 去重，若重複出現則統計次數 `count`（如 `(共 5 處呼叫)`）。
-2. **在 `differ.py` 的 `UIAGraphDiffResult` 實作差分守衛**：
+2. **在 `differ.py` 的 `CodeMapDiffResult` 實作差分守衛**：
    * 比對 `invariants_before` 與 `invariants_after`（以正規化後的 `(target_label, detail)` 為比對鍵）：
      * **`new_scope_errors` / `new_hazards`**：在 `after` 出現、但不在 `before` 中的新增違規（或同類違規數量增加）。
      * **`pre_existing_scope_errors` / `pre_existing_hazards`**：在 `before` 與 `after` 中皆存在的既有違規。
@@ -102,12 +102,12 @@
 ## 🛠️ Task P1-1：拔除 Python 後端專案的 Textual UI 命名幻覺
 
 ### 1. 問題根因定位 (Root Cause)
-* **檔案位置**：[`uia_coder/adapters/python_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/python_adapter.py#L308-L362)
+* **檔案位置**：[`code_map/adapters/python_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/python_adapter.py#L308-L362)
 * **Bug 解剖**：
   `_handle_textual_event_bindings` (L351) 只要看到任何 Python 方法名稱符合 `func_name.startswith("on_")` 且 `len(parts) >= 3`，就無條件將 `parts[1]` 當成 UI Widget 控制項（如 `vLLM` 的 `on_new_request` 被拆成 `#new (Widget)` 與 `on('request')`）。
 
 ### 2. 修改規格 (Implementation Spec)
-1. 在 `PythonUIAGraphBuilder.parse_and_build` 開始時，先檢查 `source_code` 是否包含 UI 框架特徵：
+1. 在 `PythonCodeMapBuilder.parse_and_build` 開始時，先檢查 `source_code` 是否包含 UI 框架特徵：
    ```python
    ui_keywords = ("textual", "PyQt", "PySide", "tkinter", "ttk", "wx", "kivy", "flet", "customtkinter")
    has_ui_import = any(kw in source_code for kw in ui_keywords)
@@ -123,8 +123,8 @@
 
 ### 1. 問題根因定位 (Root Cause)
 * **檔案位置**：
-  * [`uia_coder/adapters/python_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/python_adapter.py#L147)
-  * [`uia_coder/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/differ.py#L112-L164)
+  * [`code_map/adapters/python_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/python_adapter.py#L147)
+  * [`code_map/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/code_map/core/differ.py#L112-L164)
 * **Bug 解剖**：
   1. `python_adapter.py` L147 使用 `sig_text = full_text.split(":")[0].strip()` 提取簽章。當函式有參數型別註解（如 `def _get_multidict_value(field: ModelField, ...)`）時，會在第一個參數的 `:` 處被腰斬！
   2. `differ.py` 的 `to_diff_markdown()` 只渲染 `get_ui_anchors()`。當 `Ratatui`、`FastAPI`、`Caddy` 發生 `STRUCTURAL_GRAPH_DELTA`（如 `+Nodes: 7, +Edges: 16`）但檔案內無 UI 控制項時，報告只印出 `_無任何 UI 控制項變更_`，完全看不出新增或刪除了哪 7 個節點與 16 條邊。
@@ -152,14 +152,14 @@
 
 ### 1. 問題根因定位 (Root Cause)
 * **檔案位置**：
-  * [`uia_coder/core/graph.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/graph.py#L17-L24)
-  * `uia_coder/adapters/*.py`
-  * [`uia_coder/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/core/differ.py#L354-L379)
+  * [`code_map/core/graph.py`](file:///d:/AntiGravity/UIA_Coder/code_map/core/graph.py#L17-L24)
+  * `code_map/adapters/*.py`
+  * [`code_map/core/differ.py`](file:///d:/AntiGravity/UIA_Coder/code_map/core/differ.py#L354-L379)
 * **Bug 解剖**：
   在 `Preact` Commit #13 (`4cb4f809`, `compat/src/render.js`) 中，開發者修改了模組頂層（Module-Scope）的常數/正則表達式映射表。因為該變更不在任何 `FUNCTION_DEF` 內，也未改變呼叫邊，導致被漏判為 `ZERO_DELTA`。
 
 ### 2. 修改規格 (Implementation Spec)
-1. 在 `UIACodeGraph.CATEGORIES` (`graph.py`) 加入 `"MODULE_STATE"`。
+1. 在 `CodeMapGraph.CATEGORIES` (`graph.py`) 加入 `"MODULE_STATE"`。
 2. 在 JS/TS/Python/Go/Rust Adapter 中，當處於頂層作用域 (`current_scope_id == "scope:global"`) 且遇到頂層常數/變數宣告（如 JS/TS 的 `lexical_declaration` / `variable_declaration`、Python 的頂層 `assignment`、Rust 的 `const_item` / `static_item`、Go 的 `const_declaration` / `var_declaration`），若其右側值不是函式定義，則建立一個 `category="MODULE_STATE"` 節點（包含 `label`, `source_code`, `executable_fingerprint`, `line_start`, `line_end`）。
 3. 在 `differ.py` L356 的實作變更檢測中，將 `cid.startswith(("FUNCTION_DEF:", "MODULE_STATE:"))` 一併納入比對。若頂層常數的 `executable_fingerprint` 發生實質變更，同樣記入 `functions_modified`（可標註簽章為 `[Module State] {label}`），使其正確歸入 `BODY_LEVEL_SEMANTIC_DELTA`。
 
@@ -193,7 +193,7 @@ python.exe -X utf8 tools/build_review_pack.py
 ---
 
 ## 📜 附錄：Phase 1 已完成項目留存紀錄 (Completed in Phase 1)
-- [x] **Phase 1 - Task 1**：新增 `uia_coder/core/spec_verifier.py` (`SpecVerifier` 路徑可達性與 LCA 拓樸偏序驗收)。
+- [x] **Phase 1 - Task 1**：新增 `code_map/core/spec_verifier.py` (`SpecVerifier` 路徑可達性與 LCA 拓樸偏序驗收)。
 - [x] **Phase 1 - Task 2A/2B**：`differ.py` `get_canonical_id()` 詞法作用域路徑防碰撞，以及 `base_adapter.py` `_inspect_control_context()` 條件分支與 Early-Return 守衛識別。
-- [x] **Phase 1 - Task 3**：新增 `uia_coder/core/workspace_graph.py` (`WorkspaceGraphBuilder` 跨檔 `import`/`export` 符號消解)。
+- [x] **Phase 1 - Task 3**：新增 `code_map/core/workspace_graph.py` (`WorkspaceGraphBuilder` 跨檔 `import`/`export` 符號消解)。
 - [x] **Phase 1 - Task 4A/4B**：`verify_objection_evidence()` 異議防偽查核與 35 專案雙軌指標分離。

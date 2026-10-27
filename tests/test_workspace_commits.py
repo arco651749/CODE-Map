@@ -13,8 +13,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 REPO_PATH = r"D:\Users\arco0\.gemini\config\plugins\workspace-file-tree"
 
-from uia_coder.adapters import AdapterRegistry
-from uia_coder.core.differ import UIAGraphDiffer
+from code_map.adapters import AdapterRegistry
+from code_map.core.differ import CodeMapDiffer
 
 def get_all_commits():
     cmd = ["git", "-C", REPO_PATH, "log", "--reverse", "--pretty=format:%H%x09%s"]
@@ -83,7 +83,7 @@ def main():
             total_audited += 1
             full_path = os.path.join(REPO_PATH, f)
             try:
-                diff_res = UIAGraphDiffer.diff_git_file(
+                diff_res = CodeMapDiffer.diff_git_file(
                     repo_path=REPO_PATH,
                     file_path=full_path,
                     diff_range=f"{h}~1",

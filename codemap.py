@@ -7,7 +7,7 @@ import sys
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from uia_coder.cli import main
+from code_map.cli import main
 
 if __name__ == "__main__":
     main()

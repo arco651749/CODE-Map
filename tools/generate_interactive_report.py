@@ -11,7 +11,7 @@ if project_root not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from uia_coder.adapters import get_adapter_for_file
+from code_map.adapters import get_adapter_for_file
 import networkx as nx
 
 def generate_report():

@@ -2,11 +2,11 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from tree_sitter import Language, Node, Parser
 import tree_sitter_typescript as tsts
 
-from uia_coder.core.base_adapter import BaseUIAGraphBuilder
-from uia_coder.core.graph import UIACodeGraph
+from code_map.core.base_adapter import BaseCodeMapBuilder
+from code_map.core.graph import CodeMapGraph
 
 
-class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
+class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
     """
     基於 Tree-sitter 的 TypeScript / TSX 語意控制樹建構器
     支援型別化函式作用域、React JSX 標籤 (<button onClick={...}>) 與 Promise.all 並聯偵測。
@@ -26,11 +26,11 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         self.ts_parser = Parser(self.ts_lang)
         self.tsx_parser = Parser(self.tsx_lang)
 
-    def parse_and_build(self, source_code: str, file_path: str = "app.ts") -> UIACodeGraph:
+    def parse_and_build(self, source_code: str, file_path: str = "app.ts") -> CodeMapGraph:
         is_tsx = file_path.endswith(".tsx") or "<" in source_code
         parser = self.tsx_parser if is_tsx else self.ts_parser
         tree = parser.parse(bytes(source_code, "utf-8"))
-        graph = UIACodeGraph(name=f"Graph of {file_path}")
+        graph = CodeMapGraph(name=f"Graph of {file_path}")
 
         scopes: Dict[str, Dict[str, Any]] = {
             "scope:global": {
@@ -111,7 +111,7 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         scopes: Dict[str, Dict[str, Any]],
         code: str,
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
         node_scope_map: Optional[Dict[int, str]] = None,
     ):
         next_scope_id = current_scope_id
@@ -454,7 +454,7 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         scopes: Dict[str, Dict[str, Any]],
         code: str,
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
         node_scope_map: Optional[Dict[int, str]] = None,
     ):
         if node_scope_map is not None:
@@ -556,7 +556,7 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         current_scope_id: str,
         scopes: Dict[str, Dict[str, Any]],
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
     ):
         text = jsx_node.text.decode("utf-8")
         line = jsx_node.start_point[0] + 1
@@ -622,7 +622,7 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         current_scope_id: str,
         scopes: Dict[str, Dict[str, Any]],
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
     ):
         args_node = call_node.child_by_field_name("arguments")
         if not args_node or args_node.child_count < 2:
@@ -724,7 +724,7 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         caller_scope_id: str,
         scopes: Dict[str, Dict[str, Any]],
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
         is_awaited: bool = False,
     ):
         line = call_node.start_point[0] + 1
@@ -777,7 +777,7 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         scopes: Dict[str, Dict[str, Any]],
         file_path: str,
         line: int,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
         is_direct_trigger: bool = False,
         flow_type: str = "SYNC",
         is_conditional: bool = False,
@@ -877,7 +877,7 @@ class TypeScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                         is_error_handled=is_error_handled,
                     )
 
-    def _find_enclosing_node_id(self, scope_id: str, scopes: Dict[str, Dict[str, Any]], graph: UIACodeGraph) -> Optional[str]:
+    def _find_enclosing_node_id(self, scope_id: str, scopes: Dict[str, Dict[str, Any]], graph: CodeMapGraph) -> Optional[str]:
         curr = scope_id
         visited = set()
         while curr and curr not in visited:

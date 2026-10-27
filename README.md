@@ -55,13 +55,13 @@ flowchart TD
 ### 🌐 支援的 7 大主流語言與 8 種語意適配器
 | 語言類別 | 適配器模組 | 支援副檔名 | 核心捕獲能力與形式化守衛 |
 | :--- | :--- | :--- | :--- |
-| **HTML / DOM** | [`html_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/html_adapter.py) | `.html`, `.htm` | DOM 階層樹（`CONTAINS`）、內聯事件接線（`TRIGGERS`）、外部腳本連結（`GROUNDS_TO`）、標籤閉合與 `hidden`/`display:none` 級聯阻斷（`BLOCKED_VISIBILITY`） |
-| **JavaScript** | [`javascript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/javascript_adapter.py) | `.js`, `.mjs`, `.cjs` | DOM 事件綁定、原型鏈方法、閉包作用域可達性、同步阻塞 API（`alert`/`confirm`）攔截 |
-| **TypeScript / React** | [`typescript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/typescript_adapter.py) | `.ts`, `.tsx` | React JSX 控制項錨點、Hooks 依賴鏈、IoC 裝飾器管線、狀態機轉移與非同步競態守衛 |
-| **Python** | [`python_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/python_adapter.py) | `.py` | OOP 類別繼承、CLI 進入點、PyQt/Tkinter/Textual UI 控制項、主執行緒 `time.sleep` 凍結攔截 |
-| **Rust** | [`rust_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/rust_adapter.py) | `.rs` | `struct` + `impl` 關聯方法消解、`#CLI: main` 進入點、`todo!()` / `unimplemented!()` / `panic!()` 危害攔截 |
-| **Go** | [`go_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/go_adapter.py) | `.go` | 結構體接收器方法（Receiver Methods）、CLI 路由樹、`panic()` 與 `time.Sleep()` 阻塞攔截 |
-| **C#** | [`csharp_adapter.py`](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/csharp_adapter.py) | `.cs` | WPF / WinUI / Avalonia 事件綁定（`+=`）、控制項錨點、`Thread.Sleep()` 與 `NotImplementedException` 攔截 |
+| **HTML / DOM** | [`html_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/html_adapter.py) | `.html`, `.htm` | DOM 階層樹（`CONTAINS`）、內聯事件接線（`TRIGGERS`）、外部腳本連結（`GROUNDS_TO`）、標籤閉合與 `hidden`/`display:none` 級聯阻斷（`BLOCKED_VISIBILITY`） |
+| **JavaScript** | [`javascript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/javascript_adapter.py) | `.js`, `.mjs`, `.cjs` | DOM 事件綁定、原型鏈方法、閉包作用域可達性、同步阻塞 API（`alert`/`confirm`）攔截 |
+| **TypeScript / React** | [`typescript_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/typescript_adapter.py) | `.ts`, `.tsx` | React JSX 控制項錨點、Hooks 依賴鏈、IoC 裝飾器管線、狀態機轉移與非同步競態守衛 |
+| **Python** | [`python_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/python_adapter.py) | `.py` | OOP 類別繼承、CLI 進入點、PyQt/Tkinter/Textual UI 控制項、主執行緒 `time.sleep` 凍結攔截 |
+| **Rust** | [`rust_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/rust_adapter.py) | `.rs` | `struct` + `impl` 關聯方法消解、`#CLI: main` 進入點、`todo!()` / `unimplemented!()` / `panic!()` 危害攔截 |
+| **Go** | [`go_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/go_adapter.py) | `.go` | 結構體接收器方法（Receiver Methods）、CLI 路由樹、`panic()` 與 `time.Sleep()` 阻塞攔截 |
+| **C#** | [`csharp_adapter.py`](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/csharp_adapter.py) | `.cs` | WPF / WinUI / Avalonia 事件綁定（`+=`）、控制項錨點、`Thread.Sleep()` 與 `NotImplementedException` 攔截 |
 
 ---
 
@@ -211,7 +211,7 @@ python.exe -X utf8 codemap.py --list-languages
 python.exe -X utf8 codemap.py --file "src/sample_go_app.go" --check
 
 # 3. 跨檔案 / 整個專案目錄聯合建圖 (自動消解跨模組 import/export 依賴鏈)
-python.exe -X utf8 codemap.py --dir "uia_coder" --check
+python.exe -X utf8 codemap.py --dir "code_map" --check
 
 # 4. 節點前向切片與原始碼精準打包 (提供給 Subagent 的零雜訊 Context)
 python.exe -X utf8 codemap.py --file "legacy/workspaceFileTree.js" --slice "#btnDelete"
@@ -228,7 +228,7 @@ python.exe -X utf8 codemap.py --verify-objection "objection.yaml" --repo "."
 
 # 7. 雙檔案或 Git 歷史 Commits 語意圖譜差分 (Semantic Graph Diff)
 python.exe -X utf8 codemap.py --diff-files "legacy/workspaceFileTree_buggy.js" "legacy/workspaceFileTree.js" --check
-python.exe -X utf8 codemap.py --file "uia_coder/core/graph.py" --git-diff HEAD~1
+python.exe -X utf8 codemap.py --file "code_map/core/graph.py" --git-diff HEAD~1
 
 # 8. 導出雙欄互動式 HTML 視覺化儀表板 (點擊圖譜節點平滑滾動並高亮對應源碼)
 python.exe -X utf8 codemap.py --file "legacy/workspaceFileTree.js" --html "reports/dashboard.html"
@@ -269,13 +269,13 @@ d:\AntiGravity\UIA_Coder\
 ├── codemap.py                             # 🌲 CODE-Map 官方統一 CLI 入口
 ├── AGENTS.md                              # 🛡️ AI Agent 協同開發規範與反顛簸協定 (Anti-Thrashing Protocol)
 ├── README.md                              # 📖 專案核心架構與全景指引 (本文件)
-├── uia_coder/                             # 🧠 CODE-Map 核心引擎套件
+├── code_map/                             # 🧠 CODE-Map 核心引擎套件
 │   ├── core/                              # 語言無關圖論與形式化驗證核心
-│   │   ├── graph.py                       # UIACodeGraph (有向圖結構、不變量守衛、切片與源碼打包)
-│   │   ├── differ.py                      # UIAGraphDiffer (語意圖譜差分、AST 去噪指紋、增量違規判定)
+│   │   ├── graph.py                       # CodeMapGraph (有向圖結構、不變量守衛、切片與源碼打包)
+│   │   ├── differ.py                      # CodeMapDiffer (語意圖譜差分、AST 去噪指紋、增量違規判定)
 │   │   ├── spec_verifier.py               # SpecVerifier (上位規格契約偏序驗收 & Subagent 異議 AST 查證)
 │   │   ├── workspace_graph.py             # WorkspaceGraphBuilder (跨檔案 Import/Export 符號消解與聯合建圖)
-│   │   └── base_adapter.py                # BaseUIAGraphBuilder (多語言適配器抽象基底與去噪指紋計算)
+│   │   └── base_adapter.py                # BaseCodeMapBuilder (多語言適配器抽象基底與去噪指紋計算)
 │   ├── adapters/                          # 🔌 多語言 AST 語意適配器 (Strategy & Registry Pattern)
 │   │   ├── html_adapter.py                # 🌐 HTML/DOM 結構樹、標籤閉合與可見性級聯適配器
 │   │   ├── javascript_adapter.py          # 🟨 JavaScript DOM / 原型鏈 / 閉包作用域適配器

@@ -4,7 +4,7 @@ import os
 from typing import Any, Dict, List, Optional
 import networkx as nx
 
-from uia_coder.core.graph import UIACodeGraph
+from code_map.core.graph import CodeMapGraph
 
 
 class HTMLDashboardReporter:
@@ -18,7 +18,7 @@ class HTMLDashboardReporter:
 
     def generate(
         self,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
         output_path: str,
         title: Optional[str] = None,
         file_path: Optional[str] = None,

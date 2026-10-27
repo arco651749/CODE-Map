@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-p = Path("d:/AntiGravity/UIA_Coder/uia_coder/adapters/python_adapter.py")
+p = Path("d:/AntiGravity/UIA_Coder/code_map/adapters/python_adapter.py")
 text = p.read_text(encoding="utf-8")
 
 # 1. parse_and_build add _has_ui_import

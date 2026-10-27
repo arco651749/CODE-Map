@@ -219,7 +219,7 @@ sequenceDiagram
     participant Spec as 📐 CODE-Map 規格圖譜 (Spec Graph)
     participant Worker as 🛠️ 執行 Subagent (Coder)
     participant Engine as 🌲 CODE-Map 圖譜編譯器
-    participant Differ as ⚖️ UIAGraphDiffer (形式化驗收裁判)
+    participant Differ as ⚖️ CodeMapDiffer (形式化驗收裁判)
 
     Boss->>Spec: 1. 制定 Spec CODE-Map (宣告 UI Anchor、事件路由與 Invariants)
     Boss->>Worker: 2. 派發單元/接線實作任務

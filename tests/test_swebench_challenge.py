@@ -9,8 +9,8 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from uia_coder.adapters import get_adapter_for_file
-from uia_coder.core.differ import UIAGraphDiffer
+from code_map.adapters import get_adapter_for_file
+from code_map.core.differ import CodeMapDiffer
 
 
 def run_swebench_localization_eval():
@@ -85,7 +85,7 @@ def run_swebench_localization_eval():
 
         # 取得 Ground Truth 修改函式
         full_file_path = os.path.join(repo_dir, tc["file"])
-        diff_gt = UIAGraphDiffer.diff_git_file(
+        diff_gt = CodeMapDiffer.diff_git_file(
             repo_path=repo_dir,
             file_path=full_file_path,
             diff_range=f"{tc['commit']}~1",

@@ -3,7 +3,7 @@
 
 > **評估範疇**：
 > 針對 GitHub 上 **JavaScript、TypeScript、Python、Rust、Go、C#** 六大主流生態中 13 個極具代表性的開源專案，各自回溯 20 個真實「流程 / 事件 / 狀態機 / 非同步 / 生命週期 / 閉包 / 併發 / 緩衝區繪製 / 命令樹分發 / 響應式依賴追蹤 / VNode Diff」修復 Commits。
-> 檢驗 CODE-Map 控制樹建構、AST 語意推導、因果連線以及語意差分引擎（`UIAGraphDiffer`）的捕獲精度、雜訊比（SNR）與跨語言穩定性。
+> 檢驗 CODE-Map 控制樹建構、AST 語意推導、因果連線以及語意差分引擎（`CodeMapDiffer`）的捕獲精度、雜訊比（SNR）與跨語言穩定性。
 
 ---
 
@@ -42,7 +42,7 @@
 
 ### 2. `vuejs/core`（Vue 3 響應式系統與編譯器轉換）
 * **架構挑戰**：Vue 3 核心涉及 Proxy 屬性攔截、`watch` 深度依賴追蹤、`KeepAlive` 緩存組件修剪與 SSR 非同步設定（`async setup`）錯誤傳遞。
-* **技術修復**：在驗收過程中，透過真實 Commit (`7f688e84`) 的嚴格考驗，一舉排查出 `TypeScriptUIAGraphBuilder` 早期在偵測銷毀清理守衛（`removeEventListener`）時漏傳 `scopes` 的深層邊界問題，並立即修復，達成 Vue 核心代碼零崩潰、零解析錯誤。
+* **技術修復**：在驗收過程中，透過真實 Commit (`7f688e84`) 的嚴格考驗，一舉排查出 `TypeScriptCodeMapBuilder` 早期在偵測銷毀清理守衛（`removeEventListener`）時漏傳 `scopes` 的深層邊界問題，並立即修復，達成 Vue 核心代碼零崩潰、零解析錯誤。
 * **驗收成果**：
   * 精準捕獲 `packages/reactivity/src/watch.ts` 中 Watcher 回呼執行時停止依賴收集（Do not track deps in watcher callbacks）的精細因果鏈。
   * 精準捕獲 `packages/runtime-core/src/components/KeepAlive.ts` 當前組件被修剪時的即時卸載流程（`unmount`）。

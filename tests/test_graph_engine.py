@@ -9,9 +9,9 @@ if project_root not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from uia_coder.adapters import get_adapter_for_file, AdapterRegistry
-from uia_coder.core.graph import UIACodeGraph
-from uia_coder.core.differ import UIAGraphDiffer
+from code_map.adapters import get_adapter_for_file, AdapterRegistry
+from code_map.core.graph import CodeMapGraph
+from code_map.core.differ import CodeMapDiffer
 
 
 def test_registry_supported_languages():
@@ -133,7 +133,7 @@ def test_graph_diffing():
     with open(get_src_path("workspaceFileTree.js"), "r", encoding="utf-8") as f:
         g_a = adapter.parse_and_build(f.read(), "after.js")
 
-    diff_res = UIAGraphDiffer.diff_graphs(g_b, g_a)
+    diff_res = CodeMapDiffer.diff_graphs(g_b, g_a)
     print(diff_res.to_diff_markdown())
 
     # 斷言

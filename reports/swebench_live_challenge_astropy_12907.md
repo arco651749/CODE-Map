@@ -116,7 +116,7 @@ def _cstack(left, right):
 
 ## 🛠️ 第三步：微創手術式修補與 CODE-Map 形式化驗收
 
-我們僅針對 `_cstack` 第 244 行進行單行微創替換（`edit_file`），並透過 `UIAGraphDiffer` 執行形式化驗收：
+我們僅針對 `_cstack` 第 244 行進行單行微創替換（`edit_file`），並透過 `CodeMapDiffer` 執行形式化驗收：
 
 ```text
 🌲 UIA 語意控制樹變更差分 (Semantic UIA-Diff):

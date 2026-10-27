@@ -8,7 +8,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 import networkx as nx
-from uia_coder.core.graph import UIACodeGraph
+from code_map.core.graph import CodeMapGraph
 
 
 class SpecContract:
@@ -22,7 +22,7 @@ class SpecContract:
         required_anchors: Optional[List[str]] = None,
         required_causal_chains: Optional[List[Dict[str, Any]]] = None,
         invariants: Optional[Dict[str, Any]] = None,
-        spec_graph: Optional[UIACodeGraph] = None,
+        spec_graph: Optional[CodeMapGraph] = None,
     ):
         self.required_anchors = required_anchors or []
         self.required_causal_chains = required_causal_chains or []
@@ -59,8 +59,8 @@ class SpecContract:
         return cls.from_dict(data)
 
     @classmethod
-    def from_spec_graph(cls, spec_graph: UIACodeGraph) -> "SpecContract":
-        """從一張精簡的 UIACodeGraph (上位 Spec 圖譜) 自動抽取契約"""
+    def from_spec_graph(cls, spec_graph: CodeMapGraph) -> "SpecContract":
+        """從一張精簡的 CodeMapGraph (上位 Spec 圖譜) 自動抽取契約"""
         anchors = spec_graph.get_ui_anchors()
         chains = []
 
@@ -114,7 +114,7 @@ class SpecVerificationResult:
         verdict: str,
         violations: List[Dict[str, Any]],
         passed_rules: List[str],
-        actual_graph: UIACodeGraph,
+        actual_graph: CodeMapGraph,
         spec: SpecContract,
     ):
         self.passed = passed
@@ -167,7 +167,7 @@ class SpecVerifier:
     """
 
     @classmethod
-    def _find_actual_node(cls, actual_graph: UIACodeGraph, name: str) -> Optional[str]:
+    def _find_actual_node(cls, actual_graph: CodeMapGraph, name: str) -> Optional[str]:
         """在 Actual Graph 中尋找語意吻合的節點"""
         clean_name = name.lstrip("#")
 
@@ -204,7 +204,7 @@ class SpecVerifier:
 
     @classmethod
     def _find_common_ancestor_order(
-        cls, actual_graph: UIACodeGraph, u: str, v: str
+        cls, actual_graph: CodeMapGraph, u: str, v: str
     ) -> Tuple[bool, Optional[str]]:
         """
         尋找 u 與 v 在 Actual Graph 中的最近共同祖先 (LCA)，
@@ -242,8 +242,8 @@ class SpecVerifier:
     @classmethod
     def verify(
         cls,
-        spec: Union[SpecContract, Dict[str, Any], UIACodeGraph, str],
-        actual: Union[UIACodeGraph, str],
+        spec: Union[SpecContract, Dict[str, Any], CodeMapGraph, str],
+        actual: Union[CodeMapGraph, str],
         workspace_root: str = ".",
     ) -> SpecVerificationResult:
         """
@@ -254,11 +254,11 @@ class SpecVerifier:
             if spec.endswith((".json", ".yaml", ".yml")):
                 contract = SpecContract.from_file(spec)
             else:
-                from uia_coder.adapters import get_adapter_for_file
+                from code_map.adapters import get_adapter_for_file
                 ad = get_adapter_for_file(spec)
                 with open(spec, "r", encoding="utf-8") as f:
                     contract = SpecContract.from_spec_graph(ad.parse_and_build(f.read(), spec))
-        elif isinstance(spec, UIACodeGraph):
+        elif isinstance(spec, CodeMapGraph):
             contract = SpecContract.from_spec_graph(spec)
         elif isinstance(spec, dict):
             contract = SpecContract.from_dict(spec)
@@ -267,7 +267,7 @@ class SpecVerifier:
 
         # 2. 實作圖譜標準化
         if isinstance(actual, str):
-            from uia_coder.adapters import get_adapter_for_file
+            from code_map.adapters import get_adapter_for_file
             ad = get_adapter_for_file(actual)
             with open(actual, "r", encoding="utf-8") as f:
                 actual_graph = ad.parse_and_build(f.read(), actual)
@@ -453,7 +453,7 @@ def verify_objection(objection_dict: Dict[str, Any], workspace_root: str = ".") 
             "report": f"❌ 異議證據檔案不存在: '{rel_file}'，判定 Subagent 證據無效或路徑虛構！",
         }
 
-    from uia_coder.adapters import get_adapter_for_file
+    from code_map.adapters import get_adapter_for_file
     adapter = get_adapter_for_file(full_path)
     with open(full_path, "r", encoding="utf-8") as f:
         src = f.read()

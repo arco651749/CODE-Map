@@ -7,7 +7,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 import networkx as nx
-from uia_coder.core.graph import UIACodeGraph
+from code_map.core.graph import CodeMapGraph
 
 
 def get_canonical_id(node_data: Dict[str, Any], fallback_id: str) -> str:
@@ -37,7 +37,7 @@ def get_canonical_id(node_data: Dict[str, Any], fallback_id: str) -> str:
     return f"{cat}:{label}"
 
 
-def build_canonical_map(graph: UIACodeGraph) -> Tuple[Dict[str, str], Dict[str, str]]:
+def build_canonical_map(graph: CodeMapGraph) -> Tuple[Dict[str, str], Dict[str, str]]:
     """
     建立 node_id -> canonical_id 以及 canonical_id -> node_id 的雙向映射。
     若同一圖中出現同名節點，自動附加序號 (#2, #3...) 防止覆寫與碰撞。
@@ -61,7 +61,7 @@ def build_canonical_map(graph: UIACodeGraph) -> Tuple[Dict[str, str], Dict[str, 
     return canon, rev_canon
 
 
-class UIAGraphDiffResult:
+class CodeMapDiffResult:
     """
     UIA 圖譜差分結果物件
     記錄修改前後的節點增減、電線通斷、狀態躍遷與可讀差分樹。
@@ -69,8 +69,8 @@ class UIAGraphDiffResult:
 
     def __init__(
         self,
-        g_before: UIACodeGraph,
-        g_after: UIACodeGraph,
+        g_before: CodeMapGraph,
+        g_after: CodeMapGraph,
         nodes_added: List[Dict[str, Any]],
         nodes_removed: List[Dict[str, Any]],
         edges_added: List[Dict[str, Any]],
@@ -239,7 +239,7 @@ class UIAGraphDiffResult:
         lines.append(f"\n**最終驗收裁決: {self.verdict}**")
         return "\n".join(lines)
 
-    def _render_graph_subtree(self, graph: UIACodeGraph, parent: str, lines: List[str], indent: str, prefix: str, visited: Optional[Set[str]] = None):
+    def _render_graph_subtree(self, graph: CodeMapGraph, parent: str, lines: List[str], indent: str, prefix: str, visited: Optional[Set[str]] = None):
         if visited is None:
             visited = set()
         for _s, target, d in graph.g.out_edges(parent, data=True):
@@ -353,14 +353,14 @@ class UIAGraphDiffResult:
         return "\n".join(lines)
 
 
-class UIAGraphDiffer:
+class CodeMapDiffer:
     """
     UIA 圖譜差分計算器
-    支援兩個 UIACodeGraph 實例比較、或是對 Git 歷史抽取檔案比對。
+    支援兩個 CodeMapGraph 實例比較、或是對 Git 歷史抽取檔案比對。
     """
 
     @classmethod
-    def diff_graphs(cls, g_before: UIACodeGraph, g_after: UIACodeGraph) -> UIAGraphDiffResult:
+    def diff_graphs(cls, g_before: CodeMapGraph, g_after: CodeMapGraph) -> CodeMapDiffResult:
         # 1. 建立語意正規鍵對照 (Canonical Map，具備防同名碰撞序號)
         canon_b, rev_canon_b = build_canonical_map(g_before)
         canon_a, rev_canon_a = build_canonical_map(g_after)
@@ -464,7 +464,7 @@ class UIAGraphDiffer:
         inv_b = g_before.check_invariants()
         inv_a = g_after.check_invariants()
 
-        return UIAGraphDiffResult(
+        return CodeMapDiffResult(
             g_before=g_before,
             g_after=g_after,
             nodes_added=nodes_added,
@@ -486,8 +486,8 @@ class UIAGraphDiffer:
         file_path: str,
         diff_range: str = "HEAD~1",
         target_ref: Optional[str] = None,
-    ) -> UIAGraphDiffResult:
-        from uia_coder.adapters import get_adapter_for_file
+    ) -> CodeMapDiffResult:
+        from code_map.adapters import get_adapter_for_file
 
         adapter = get_adapter_for_file(file_path)
         rel_path = os.path.relpath(file_path, repo_path).replace("\\", "/")

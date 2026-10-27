@@ -3,7 +3,7 @@
 
 > **評估範疇**：
 > 針對 GitHub 上 **JavaScript、TypeScript、Python、Rust、Go** 五大主流生態中 9 個極具代表性的開源專案，各自回溯 20 個真實「流程 / 事件 / 狀態機 / 非同步 / 生命週期 / 閉包 / 併發 / 緩衝區繪製」修復 Commits。
-> 檢驗 CODE-Map 控制樹建構、AST 語意推導、因果連線以及語意差分引擎（`UIAGraphDiffer`）的捕獲精度、雜訊比（SNR）與跨語言穩定性。
+> 檢驗 CODE-Map 控制樹建構、AST 語意推導、因果連線以及語意差分引擎（`CodeMapDiffer`）的捕獲精度、雜訊比（SNR）與跨語言穩定性。
 
 ---
 
@@ -65,13 +65,13 @@ CODE-Map 成功在四大語言之頂級 TUI 框架上完成全量語意差分驗
 
 ## 🛡️ Rust 與 Go 適配器新增防護能力
 
-### Rust 適配器 ([rust_adapter.py](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/rust_adapter.py))
+### Rust 適配器 ([rust_adapter.py](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/rust_adapter.py))
 * **結構體關聯方法消解**：自動識別 `impl Struct` 區塊，將方法名稱正規化為 `Struct::method`，並支援透過 `self.method()` 自動解析關聯方法調用。
 * **執行期未決危害攔截**：深度辨識 `macro_invocation`，精確攔截 `panic!()`、`todo!()` 與 `unimplemented!()`，標記為 `BLOCKED_INVARIANT` 阻斷邊。
 * **非同步語法推導**：自動識別 `async fn` 與 `.await` 表達式，標記為非同步因果流。
 * **CLI 進入點錨點**：自動將 `fn main()` 註冊為 `#CLI: main` 控制項根節點。
 
-### Go 適配器 ([go_adapter.py](file:///d:/AntiGravity/UIA_Coder/uia_coder/adapters/go_adapter.py))
+### Go 適配器 ([go_adapter.py](file:///d:/AntiGravity/UIA_Coder/code_map/adapters/go_adapter.py))
 * **結構體接收器方法消解**：自動從 `func (r *Receiver) Method()` 提取接收器型別，正規化為 `Receiver.Method`，支援局部與全域作用域查找。
 * **Goroutine 併發追蹤**：辨識 `go func(...)` 語句，為內部呼叫打上 `flow_type="ASYNC"` 標記。
 * **恐慌與阻塞中斷攔截**：
@@ -85,4 +85,4 @@ CODE-Map 成功在四大語言之頂級 TUI 框架上完成全量語意差分驗
 
 1. **靜態型別與常數差分過濾優化**：針對 Go `const` 映射與 TypeScript `type` 宣告，提供可選的「微語意差異（Micro-diff）」標籤，讓使用者可自主切換關注焦點。
 2. **C# / .NET 生態擴充**：進一步針對 WPF/WinUI 與 ASP.NET 核心進行類似的 20-commit 真實專案回溯評估。
-3. **即時 CI 守護整合**：將 `UIAGraphDiffer` 作為 GitHub Actions / Pre-commit 守門機制，直接攔截未消解呼叫、未完成巨集與 UI 凍結危害。
+3. **即時 CI 守護整合**：將 `CodeMapDiffer` 作為 GitHub Actions / Pre-commit 守門機制，直接攔截未消解呼叫、未完成巨集與 UI 凍結危害。

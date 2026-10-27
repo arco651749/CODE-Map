@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Set
-from uia_coder.core.graph import UIACodeGraph
+from code_map.core.graph import CodeMapGraph
 
 
 def _has_early_exit(node: Any) -> bool:
@@ -27,7 +27,7 @@ def _has_early_exit(node: Any) -> bool:
     return False
 
 
-class BaseUIAGraphBuilder(ABC):
+class BaseCodeMapBuilder(ABC):
     """
     所有語言語意圖譜建構器的抽象基礎介面 (Strategy Pattern)
     """
@@ -45,9 +45,9 @@ class BaseUIAGraphBuilder(ABC):
         pass
 
     @abstractmethod
-    def parse_and_build(self, source_code: str, file_path: str = "main") -> UIACodeGraph:
+    def parse_and_build(self, source_code: str, file_path: str = "main") -> CodeMapGraph:
         """
-        將原始碼字串解析為標準 UIACodeGraph
+        將原始碼字串解析為標準 CodeMapGraph
         """
         pass
 

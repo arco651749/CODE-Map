@@ -8,9 +8,9 @@ if hasattr(sys.stdout, "reconfigure"):
 import networkx as nx
 
 
-class UIACodeGraph:
+class CodeMapGraph:
     """
-    UIA-Coder 行為語意圖譜核心 (語言無關，基於 NetworkX DiGraph)
+    CODE-Map 行為語意圖譜核心 (語言無關，基於 NetworkX DiGraph)
     負責管理所有 UI 控制項錨點、事件綁定、函式宣告、呼叫點與不變量守衛。
     """
 
@@ -119,7 +119,7 @@ class UIACodeGraph:
         return data
 
     @classmethod
-    def from_node_link_data(cls, data: Dict[str, Any]) -> "UIACodeGraph":
+    def from_node_link_data(cls, data: Dict[str, Any]) -> "CodeMapGraph":
         """從標準 NetworkX Node-Link 字典還原為圖實例"""
         graph = cls()
         graph.g = nx.node_link_graph(data)
@@ -137,7 +137,7 @@ class UIACodeGraph:
             if d.get("category") == "UI_CONTROL"
         ]
 
-    def forward_slice(self, anchor_id: str) -> "UIACodeGraph":
+    def forward_slice(self, anchor_id: str) -> "CodeMapGraph":
         """
         前向圖切片 (Forward Graph Slicing)
         從指定的 UI 控制項錨點出發，切出所有受其波及與觸發的因果子圖。
@@ -149,7 +149,7 @@ class UIACodeGraph:
         sub_nodes = descendants | {anchor_id}
         sub_g = self.g.subgraph(sub_nodes).copy()
         
-        sliced = UIACodeGraph(name=f"Slice of {anchor_id}")
+        sliced = CodeMapGraph(name=f"Slice of {anchor_id}")
         sliced.g = sub_g
         return sliced
 
@@ -380,9 +380,9 @@ class UIACodeGraph:
             }
         }
 
-    def to_uia_markdown(self, anchor_id: Optional[str] = None) -> str:
+    def to_codemap_markdown(self, anchor_id: Optional[str] = None) -> str:
         """
-        將有向圖投影為樹狀 Markdown 呈現（UIA 階層控制樹）
+        將有向圖投影為樹狀 Markdown 呈現（CODE-Map 階層控制樹）
         適用於對人類工程師或 LLM 展現清晰的直觀脈絡。
         """
         anchors = [anchor_id] if anchor_id else self.get_ui_anchors()
@@ -401,6 +401,9 @@ class UIACodeGraph:
             self._render_subtree(anchor, lines, indent="  ", visited=visited)
 
         return "\n".join(lines)
+
+    def to_uia_markdown(self, anchor_id: Optional[str] = None) -> str:
+        return self.to_codemap_markdown(anchor_id=anchor_id)
 
     def _render_subtree(self, parent: str, lines: List[str], indent: str, visited: Set[str]):
         out_edges = sorted(

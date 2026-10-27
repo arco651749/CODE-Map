@@ -10,21 +10,21 @@ if project_root not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from uia_coder.adapters import AdapterRegistry
-from uia_coder.adapters.html_adapter import HTMLUIAGraphBuilder
+from code_map.adapters import AdapterRegistry
+from code_map.adapters.html_adapter import HTMLCodeMapBuilder
 
 
 class TestHTMLAdapter(unittest.TestCase):
 
     def setUp(self):
-        self.builder = HTMLUIAGraphBuilder()
+        self.builder = HTMLCodeMapBuilder()
 
     def test_registry_supports_html(self):
         """測試語言註冊中心是否正確包含 HTML 且副檔名支援 .html, .htm"""
         adapter = AdapterRegistry.get_adapter("test.html")
-        self.assertIsInstance(adapter, HTMLUIAGraphBuilder)
+        self.assertIsInstance(adapter, HTMLCodeMapBuilder)
         adapter_htm = AdapterRegistry.get_adapter("view.htm")
-        self.assertIsInstance(adapter_htm, HTMLUIAGraphBuilder)
+        self.assertIsInstance(adapter_htm, HTMLCodeMapBuilder)
 
     def test_clean_html_passes_invariants(self):
         """測試乾淨結構完整的 HTML 頁面正常通過形式化驗收 (READY_TO_SHIP)"""

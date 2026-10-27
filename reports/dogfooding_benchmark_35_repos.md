@@ -3,7 +3,7 @@
 
 > **評估範疇**：
 > 針對 GitHub 上 **JavaScript、TypeScript、Python、Rust、Go、C#** 六大主流語言生態中的 35 個世界頂級開源專案，各自回溯 20 個真實「流程 / 事件 / 狀態機 / 非同步 / 生命週期 / 閉包 / 併發 / 緩衝區繪製 / 命令樹分發 / 響應式依賴追蹤 / VNode Diff / Web 路由中介軟體 / 執行緒池記憶體映射 / 終端事件循環 / XAML 控制項樹 / HTTP 請求管線 / 裝飾器 IoC / 全域狀態閉包 / 連線池超時 / 多工 Actor IPC / Arrow DataFrame / ORM 交易 / AI 推理串流 / Server Actions / ECS 系統算子排程 / 雲原生代理與 TLS / 打包構建生命週期」修復 Commits。
-> 檢驗 CODE-Map 控制樹建構、AST 語意推導、因果連線以及語意差分引擎（`UIAGraphDiffer`）的捕獲精度、信噪比（SNR）與跨語言穩定性。
+> 檢驗 CODE-Map 控制樹建構、AST 語意推導、因果連線以及語意差分引擎（`CodeMapDiffer`）的捕獲精度、信噪比（SNR）與跨語言穩定性。
 
 ---
 

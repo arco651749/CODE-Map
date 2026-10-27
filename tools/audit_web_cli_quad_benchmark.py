@@ -10,7 +10,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from uia_coder.core.differ import UIAGraphDiffer
+from code_map.core.differ import CodeMapDiffer
 
 REPOS = {
     "fastapi": {
@@ -96,7 +96,7 @@ def audit_repo(repo_name, repo_info):
         for f in files:
             full_path = os.path.join(repo_path, f)
             try:
-                diff_res = UIAGraphDiffer.diff_git_file(
+                diff_res = CodeMapDiffer.diff_git_file(
                     repo_path=repo_path,
                     file_path=full_path,
                     diff_range=f"{h}~1",

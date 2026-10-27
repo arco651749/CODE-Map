@@ -2,11 +2,11 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from tree_sitter import Language, Node, Parser
 import tree_sitter_javascript as tsjs
 
-from uia_coder.core.base_adapter import BaseUIAGraphBuilder
-from uia_coder.core.graph import UIACodeGraph
+from code_map.core.base_adapter import BaseCodeMapBuilder
+from code_map.core.graph import CodeMapGraph
 
 
-class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
+class JavaScriptCodeMapBuilder(BaseCodeMapBuilder):
     """
     基於 Tree-sitter 的 JavaScript 語意控制樹建構器
     追蹤 Lexical Scope 堆疊、消解識別碼可達性並建立 NetworkX 語意圖。
@@ -24,9 +24,9 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         self.language = Language(tsjs.language())
         self.parser = Parser(self.language)
 
-    def parse_and_build(self, source_code: str, file_path: str = "app.js") -> UIACodeGraph:
+    def parse_and_build(self, source_code: str, file_path: str = "app.js") -> CodeMapGraph:
         tree = self.parser.parse(bytes(source_code, "utf-8"))
-        graph = UIACodeGraph(name=f"Graph of {file_path}")
+        graph = CodeMapGraph(name=f"Graph of {file_path}")
 
         scopes: Dict[str, Dict[str, Any]] = {
             "scope:global": {
@@ -105,7 +105,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         scopes: Dict[str, Dict[str, Any]],
         code: str,
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
         node_scope_map: Optional[Dict[int, str]] = None,
     ):
         next_scope_id = current_scope_id
@@ -449,7 +449,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         scopes: Dict[str, Dict[str, Any]],
         code: str,
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
         node_scope_map: Optional[Dict[int, str]] = None,
     ):
         if node_scope_map is not None:
@@ -549,7 +549,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         current_scope_id: str,
         scopes: Dict[str, Dict[str, Any]],
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
     ):
         """解析 Backbone / Spine 的 events 雜湊表，建立 UI_CONTROL -> EVENT_BINDING -> 處理常式 接線"""
         for child in object_node.children:
@@ -644,7 +644,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         current_scope_id: str,
         scopes: Dict[str, Dict[str, Any]],
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
     ):
         args_node = call_node.child_by_field_name("arguments")
         if not args_node or args_node.child_count < 2:
@@ -770,7 +770,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         caller_scope_id: str,
         scopes: Dict[str, Dict[str, Any]],
         file_path: str,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
         is_awaited: bool = False,
     ):
         line = call_node.start_point[0] + 1
@@ -823,7 +823,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
         scopes: Dict[str, Dict[str, Any]],
         file_path: str,
         line: int,
-        graph: UIACodeGraph,
+        graph: CodeMapGraph,
         is_direct_trigger: bool = False,
         flow_type: str = "SYNC",
         is_conditional: bool = False,
@@ -923,7 +923,7 @@ class JavaScriptUIAGraphBuilder(BaseUIAGraphBuilder):
                         is_error_handled=is_error_handled,
                     )
 
-    def _find_enclosing_node_id(self, scope_id: str, scopes: Dict[str, Dict[str, Any]], graph: UIACodeGraph) -> Optional[str]:
+    def _find_enclosing_node_id(self, scope_id: str, scopes: Dict[str, Dict[str, Any]], graph: CodeMapGraph) -> Optional[str]:
         curr = scope_id
         visited = set()
         while curr and curr not in visited:

@@ -3,11 +3,11 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from tree_sitter import Language, Node, Parser
 import tree_sitter_go as tsgo
 
-from uia_coder.core.base_adapter import BaseUIAGraphBuilder
-from uia_coder.core.graph import UIACodeGraph
+from code_map.core.base_adapter import BaseCodeMapBuilder
+from code_map.core.graph import CodeMapGraph
 
 
-class GoUIAGraphBuilder(BaseUIAGraphBuilder):
+class GoCodeMapBuilder(BaseCodeMapBuilder):
     """
     基於 Tree-sitter TreeCursor 的高效穩定 Go 語意控制樹建構器
     - 採用 TreeCursor 走訪與位元組索引切片，避免 Windows C 擴充記憶體訪問越界 (Access Violation)
@@ -28,11 +28,11 @@ class GoUIAGraphBuilder(BaseUIAGraphBuilder):
         self.language = Language(tsgo.language())
         self.parser = Parser(self.language)
 
-    def parse_and_build(self, source_code: str, file_path: str = "main.go") -> UIACodeGraph:
+    def parse_and_build(self, source_code: str, file_path: str = "main.go") -> CodeMapGraph:
         # 保持 source_bytes 於局部變數生命週期內，防止 PyMalloc 記憶體重用
         source_bytes = source_code.encode("utf-8")
         tree = self.parser.parse(source_bytes)
-        graph = UIACodeGraph(name=f"Graph of {file_path}")
+        graph = CodeMapGraph(name=f"Graph of {file_path}")
 
         # 預先計算換行位元組位移，安全且極速換算行號
         line_starts = [0]

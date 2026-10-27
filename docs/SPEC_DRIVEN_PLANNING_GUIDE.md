@@ -163,4 +163,4 @@ CODE-Map 的語言適配器（`python_adapter`、`javascript_adapter`、`html_ad
    - 檢查 `CatchClause` 內部是否存在對 `showToast` 節點的呼叫語句。
    - 檢查 `FinallyClause` 內部是否存在對狀態變數的重置語句。
 
-若 Subagent 漏寫任何一項，CODE-Map 差分驗證器 (`UIAGraphDiffer`) 會直接產出結構化反例，促使 Subagent 精準修復，達成全自動的形式化工程閉環。
+若 Subagent 漏寫任何一項，CODE-Map 差分驗證器 (`CodeMapDiffer`) 會直接產出結構化反例，促使 Subagent 精準修復，達成全自動的形式化工程閉環。
