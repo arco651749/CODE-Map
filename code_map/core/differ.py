@@ -427,10 +427,10 @@ class CodeMapDiffer:
         edges_added = [k for k in edges_canon_a if k not in edges_canon_b and k not in matched_a_edges]
         edges_removed = [k for k in edges_canon_b if k not in edges_canon_a and k not in matched_b_edges]
 
-        # 4. 函式實作與頂層狀態變更檢測 (Function & Module State Code Modification Detection)
+        # 4. 函式實作、頂層狀態與 UI 控制項/主題定義變更檢測
         functions_modified = []
         for cid in (canon_nodes_b & canon_nodes_a):
-            if cid.startswith(("FUNCTION_DEF:", "MODULE_STATE:")):
+            if cid.startswith(("FUNCTION_DEF:", "MODULE_STATE:", "UI_CONTROL:")):
                 nid_b = rev_canon_b[cid]
                 nid_a = rev_canon_a[cid]
                 data_b = g_before.g.nodes[nid_b]

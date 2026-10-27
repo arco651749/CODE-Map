@@ -1,5 +1,6 @@
+import bisect
+import hashlib
 import re
-import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from code_map.core.base_adapter import BaseCodeMapBuilder
@@ -8,12 +9,13 @@ from code_map.core.graph import CodeMapGraph
 
 class XAMLCodeMapBuilder(BaseCodeMapBuilder):
     """
-    Avalonia (.axaml) 與 WPF / WinUI / MAUI (.xaml) 視覺樹與事件接線建構器
-    - 解析 XAML 控制項階層樹 (CONTAINS) 與 x:Name / Name 錨點
+    Avalonia (.axaml) 與 WPF / WinUI / MAUI (.xaml) 視覺樹、主題樣式與事件接線建構器
+    - 解析 XAML 控制項階層樹 (CONTAINS) 與 x:Name / Name / PART_ 模板部件錨點
+    - 解析 Avalonia ControlTheme (TargetType/x:Key)、Style (Selector) 與 ResourceDictionary 資源合併
     - 偵測可見性阻斷守衛: Avalonia IsVisible="False" 與 WPF Visibility="Collapsed|Hidden" (BLOCKED_VISIBILITY)
     - 捕捉路由事件綁定 (Click, PointerPressed, Tapped, SelectionChanged, TextChanged 等)
     - 捕捉 MVVM 命令綁定 (Command="{Binding SaveCommand}" / "{CompiledBinding ...}")
-    - 支援與 Code-behind (.axaml.cs / .xaml.cs) 及 ViewModel 跨檔自動縫合
+    - 計算去 XML 註解之可執行語意指紋 (executable_fingerprint)，精準捕捉 Setter / Template 內部微調
     """
 
     XAML_EVENTS = {
@@ -25,18 +27,18 @@ class XAMLCodeMapBuilder(BaseCodeMapBuilder):
         "DataContextChanged", "Initialized", "TemplateApplied",
     }
 
-    LAYOUT_CONTAINERS = {
-        "Window", "UserControl", "Page", "Application", "ResourceDictionary",
-        "Grid", "StackPanel", "DockPanel", "WrapPanel", "Canvas", "RelativePanel",
-        "Border", "ScrollViewer", "Viewbox", "SplitView", "TabControl", "TabItem",
-        "Expander", "GroupBox", "Card", "ItemsControl", "ContentControl",
+    ROOT_AND_THEME_CONTAINERS = {
+        "Window", "UserControl", "Page", "Application", "ResourceDictionary", "Styles",
+        "ControlTheme", "Style", "DataTemplate", "TreeDataTemplate", "ControlTemplate",
+        "MergeResourceInclude", "StyleInclude", "ResourceInclude",
     }
 
     INTERACTIVE_CONTROLS = {
         "Button", "RepeatButton", "ToggleButton", "RadioButton", "CheckBox", "HyperlinkButton",
-        "TextBox", "MaskedTextBox", "NumericUpDown", "AutoCompleteBox", "ComboBox",
+        "TextBox", "MaskedTextBox", "NumericUpDown", "AutoCompleteBox", "ComboBox", "ComboBoxItem",
         "ListBox", "ListView", "TreeView", "DataGrid", "Slider", "ToggleSwitch",
         "MenuItem", "NativeMenuItem", "Calendar", "DatePicker", "TimePicker", "TabStrip",
+        "NumberBox", "NavigationView", "ContentDialog", "InfoBar", "PipsPager", "TabView",
     }
 
     @property
@@ -46,6 +48,13 @@ class XAMLCodeMapBuilder(BaseCodeMapBuilder):
     @property
     def language_name(self) -> str:
         return "XAML / Avalonia AXAML"
+
+    @staticmethod
+    def _compute_xml_fingerprint(xml_slice: str) -> str:
+        """移除 XML 註解 (<!-- ... -->) 並正規化空白後計算 SHA-256 指紋"""
+        no_comments = re.sub(r"<!--.*?-->", "", xml_slice, flags=re.DOTALL)
+        tokens = re.findall(r'[A-Za-z0-9_.:#{}=/"\'-]+', no_comments)
+        return hashlib.sha256(" ".join(tokens).encode("utf-8")).hexdigest()
 
     def parse_and_build(self, source_code: str, file_path: str = "MainWindow.axaml") -> CodeMapGraph:
         graph = CodeMapGraph(name=f"XAML Graph of {file_path}")
@@ -61,44 +70,60 @@ class XAMLCodeMapBuilder(BaseCodeMapBuilder):
         graph.g.graph["x_class"] = x_class
         graph.g.graph["x_datatype"] = x_datatype
 
-        # 使用正則預掃描所有起始/自閉合標籤與行號，兼顧容錯性與精確行號
+        # 先將註解區間遮罩（保留換行符號以維持精確行號），避免註解內的範例標籤干擾解析
+        def _mask_comment(match: re.Match) -> str:
+            return "".join("\n" if c == "\n" else " " for c in match.group(0))
+
+        masked_source = re.sub(r"<!--.*?-->", _mask_comment, source_code, flags=re.DOTALL)
+
         tag_pattern = re.compile(
-            r"<(/?)([A-Za-z_][\w.]*)(?:\s+([^>]*?))?(/?)>",
+            r"<(/?)([A-Za-z_][\w.:-]*)(?:\s+([^>]*?))?(/?)>",
             re.DOTALL,
         )
         attr_pattern = re.compile(r'([A-Za-z_][\w:.-]*)\s*=\s*"([^"]*)"')
-        binding_pattern = re.compile(r"\{(?:Compiled)?Binding\s+(?:Path\s*=\s*)?([A-Za-z_][\w.]*)")
+        binding_pattern = re.compile(
+            r"\{(?:Compiled)?Binding\s+(?:Path\s*=\s*)?(?:[\(\)\$\[\]:\w.]*\.)?([A-Za-z_]\w*)"
+        )
 
         line_starts = [0]
         for idx, ch in enumerate(source_code):
             if ch == "\n":
                 line_starts.append(idx + 1)
 
-        import bisect
         def get_line(offset: int) -> int:
             return bisect.bisect_right(line_starts, offset)
 
         stack: List[Dict[str, Any]] = []
         ctrl_counter = 0
 
-        for m in tag_pattern.finditer(source_code):
+        for m in tag_pattern.finditer(masked_source):
             is_closing = bool(m.group(1))
             raw_tag = m.group(2)
             attr_str = m.group(3) or ""
             is_self_closing = bool(m.group(4))
             line_no = get_line(m.start())
 
-            # 略過屬性元素語法，例如 <Window.DataContext> 或 <Button.Styles>
-            if "." in raw_tag:
+            # 略過屬性元素語法，例如 <Window.DataContext>，但保留其內部子控制項走訪
+            if "." in raw_tag and ":" not in raw_tag:
                 continue
 
             local_tag = raw_tag.split(":")[-1]
 
             if is_closing:
-                # 彈出對應開啟標籤
                 for i in range(len(stack) - 1, -1, -1):
                     if stack[i]["tag"] == local_tag:
-                        stack.pop(i)
+                        popped = stack.pop(i)
+                        nid = popped.get("node_id")
+                        if nid and nid in graph.g:
+                            start_off = popped["start_offset"]
+                            end_off = m.end()
+                            end_line = get_line(end_off)
+                            full_slice = source_code[start_off:end_off]
+                            props = graph.g.nodes[nid]["props"]
+                            props["source_code"] = full_slice
+                            props["line_end"] = end_line
+                            props["line_count"] = max(1, end_line - props["line_start"] + 1)
+                            props["executable_fingerprint"] = self._compute_xml_fingerprint(full_slice)
                         break
                 continue
 
@@ -123,14 +148,29 @@ class XAMLCodeMapBuilder(BaseCodeMapBuilder):
             effective_hidden = is_self_hidden or parent_hidden
             effective_reason = hidden_reason if is_self_hidden else f"父容器隱藏 ({parent_hidden_reason})"
 
-            # 決定控制項名稱與 ID
+            # 決定控制項或主題/樣式節點名稱
             x_name = attrs.get("x:Name") or attrs.get("Name")
+            x_key = attrs.get("x:Key")
+            target_type = attrs.get("TargetType")
+            selector = attrs.get("Selector")
+            source_uri = attrs.get("Source")
+
             ctrl_counter += 1
-            display_name = f"#{x_name}" if x_name else f"<{local_tag}>#{ctrl_counter}"
+            if x_name:
+                display_name = f"#{x_name}"
+            elif local_tag == "ControlTheme" and (x_key or target_type):
+                display_name = f"ControlTheme:{x_key or target_type}"
+            elif local_tag == "Style" and selector:
+                display_name = f"Style[{selector}]"
+            elif local_tag in ("MergeResourceInclude", "StyleInclude", "ResourceInclude") and source_uri:
+                display_name = f"{local_tag}:{source_uri}"
+            else:
+                display_name = f"<{local_tag}>#{ctrl_counter}"
+
             ctrl_id = f"ctrl:{display_name}@{file_path}:L{line_no}"
 
             # 檢查是否有綁定事件或 Command
-            bound_events: List[Tuple[str, str, str]] = []  # (event_or_prop, target_name, kind)
+            bound_events: List[Tuple[str, str, str]] = []
             for k, v in attrs.items():
                 clean_k = k.split(".")[-1].split(":")[-1]
                 if clean_k in self.XAML_EVENTS and not v.strip().startswith("{"):
@@ -145,26 +185,32 @@ class XAMLCodeMapBuilder(BaseCodeMapBuilder):
                 bool(x_name)
                 or bool(bound_events)
                 or local_tag in self.INTERACTIVE_CONTROLS
-                or local_tag in ("Window", "UserControl", "Page")
+                or local_tag in self.ROOT_AND_THEME_CONTAINERS
             )
 
             current_node_id = None
             if should_create_node:
                 current_node_id = ctrl_id
+                raw_slice = source_code[m.start():m.end()]
+                node_cat = "MODULE_STATE" if local_tag in ("ControlTheme", "Style", "ResourceDictionary", "Styles", "MergeResourceInclude", "StyleInclude", "ResourceInclude") else "UI_CONTROL"
+
                 graph.add_node_rich(
                     node_id=ctrl_id,
                     label=display_name,
-                    category="UI_CONTROL",
+                    category=node_cat,
                     scope={"scope_id": x_class or "scope:xaml", "file": file_path, "line": line_no},
                     props={
                         "ui_type": f"Avalonia/XAML {local_tag}",
+                        "signature": f"[{local_tag}] {display_name}",
                         "tag": local_tag,
                         "x_name": x_name or "",
                         "is_hidden": effective_hidden,
                         "hidden_reason": effective_reason,
-                        "source_code": m.group(0),
+                        "source_code": raw_slice,
                         "line_start": line_no,
                         "line_end": line_no,
+                        "line_count": 1,
+                        "executable_fingerprint": self._compute_xml_fingerprint(raw_slice),
                     },
                 )
 
@@ -200,7 +246,6 @@ class XAMLCodeMapBuilder(BaseCodeMapBuilder):
                         detail=f"💥 視覺樹遮蔽阻斷: {effective_reason}" if effective_hidden else f"XAML {kind} 綁定",
                     )
 
-                    # 建立外部目標節點佔位符 (待 WorkspaceGraph 跨檔縫合至 .axaml.cs 或 ViewModel.cs)
                     ext_target_id = f"func:{target_handler}@external"
                     if ext_target_id not in graph.g:
                         graph.add_node_rich(
@@ -233,6 +278,7 @@ class XAMLCodeMapBuilder(BaseCodeMapBuilder):
                 stack.append({
                     "tag": local_tag,
                     "node_id": current_node_id,
+                    "start_offset": m.start(),
                     "is_hidden": effective_hidden,
                     "hidden_reason": effective_reason,
                 })
