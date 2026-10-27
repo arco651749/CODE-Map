@@ -97,24 +97,36 @@ class CSharpCodeMapBuilder(BaseCodeMapBuilder):
                         },
                     )
 
-            elif ntype in ("field_declaration", "constant_declaration"):
+            elif ntype in ("field_declaration", "constant_declaration", "property_declaration"):
                 curr_class = class_stack[-1] if class_stack else None
                 start_row = get_line(node.start_byte)
                 end_row = get_line(node.end_byte)
                 source_code_slice = decode_slice(node.start_byte, node.end_byte)
-                var_name = source_code_slice.split("=")[0].strip().split()[-1] if "=" in source_code_slice else f"state_{start_row}"
+                
+                # 提取屬性或欄位名稱
+                name_node = node.child_by_field_name("name")
+                if name_node:
+                    var_name = decode_slice(name_node.start_byte, name_node.end_byte)
+                else:
+                    var_name = source_code_slice.split("=")[0].strip().split()[-1] if "=" in source_code_slice else f"state_{start_row}"
+                    var_name = var_name.split("{")[0].strip()
                 var_name = var_name.strip(";")
+
                 state_id = f"state:{var_name}@{file_path}:L{start_row}"
+                category = "FUNCTION_DEF" if ntype == "property_declaration" and ("=>" in source_code_slice or "{" in source_code_slice) else "MODULE_STATE"
                 graph.add_node_rich(
                     node_id=state_id,
                     label=var_name,
-                    category="MODULE_STATE",
+                    category=category,
                     scope={"scope_id": curr_class or "scope:global", "file": file_path, "line": start_row},
                     props={
-                        "signature": f"[Module State] {var_name}",
+                        "signature": f"[{'Property' if ntype == 'property_declaration' else 'Module State'}] {var_name}",
                         "source_code": source_code_slice,
                         "line_start": start_row,
                         "line_end": end_row,
+                        "line_count": max(1, end_row - start_row + 1),
+                        "class_name": curr_class or "",
+                        "raw_name": var_name,
                         "executable_fingerprint": self.compute_executable_fingerprint(node),
                     }
                 )
@@ -243,6 +255,38 @@ class CSharpCodeMapBuilder(BaseCodeMapBuilder):
                     call_text = decode_slice(fn_node.start_byte, fn_node.end_byte)
                     line_no = get_line(node.start_byte)
 
+                    # 1. Avalonia / WPF 專屬事件接線: button.AddHandler(Button.ClickEvent, OnClick)
+                    if "AddHandler" in call_text:
+                        args_node = node.child_by_field_name("arguments")
+                        if args_node and len(args_node.children) >= 3:
+                            arg_text = decode_slice(args_node.start_byte, args_node.end_byte)
+                            # 提取 receiver (例如 button) 與 handler (例如 OnClick)
+                            ctrl_name = call_text.split(".")[0].strip("?")
+                            ctrl_id = f"ctrl:#{ctrl_name}@{file_path}:L{line_no}"
+                            if ctrl_id not in graph.g:
+                                graph.add_node_rich(
+                                    node_id=ctrl_id,
+                                    label=f"#{ctrl_name}",
+                                    category="UI_CONTROL",
+                                    scope={"scope_id": curr_class or "scope:global", "file": file_path, "line": line_no},
+                                    props={"ui_type": "Avalonia Control", "source_code": decode_slice(node.start_byte, node.end_byte), "line_start": line_no, "line_end": line_no},
+                                )
+                            evt_id = f"event:{ctrl_name}.AddHandler@{file_path}:L{line_no}"
+                            graph.add_node_rich(
+                                node_id=evt_id,
+                                label=f"AddHandler({arg_text.split(',')[0].strip('() ')})",
+                                category="EVENT_BINDING",
+                                scope={"scope_id": curr_class or "scope:global", "file": file_path, "line": line_no},
+                                props={"event": "AddHandler"},
+                            )
+                            graph.add_edge_rich(ctrl_id, evt_id, edge_type="WIRES_TO", status="VALID")
+                            handler_candidate = arg_text.split(",")[-1].strip("() \r\n\t")
+                            handler_name = handler_candidate.split(".")[-1]
+                            target_id = defs.get(handler_name) or (defs.get(f"{curr_class}.{handler_name}") if curr_class else None)
+                            if target_id:
+                                graph.add_edge_rich(evt_id, target_id, edge_type="TRIGGERS", status="VALID", detail="Avalonia AddHandler 事件接線")
+
+                    # 2. C# / GUI 同步執行緒凍結與阻斷危害偵測
                     if "Thread.Sleep" in call_text:
                         hazard_id = f"hazard:Thread.Sleep@{file_path}:L{line_no}"
                         graph.add_node_rich(
@@ -259,19 +303,37 @@ class CSharpCodeMapBuilder(BaseCodeMapBuilder):
                             status="BLOCKED_INVARIANT",
                             detail="呼叫了 Thread.Sleep() 同步阻塞 UI 執行緒",
                         )
+                    elif any(call_text.endswith(k) for k in (".GetAwaiter().GetResult", ".Wait", ".Result")) or ".GetAwaiter().GetResult" in call_text:
+                        hazard_id = f"hazard:AsyncSyncDeadlock@{file_path}:L{line_no}"
+                        graph.add_node_rich(
+                            node_id=hazard_id,
+                            label=f"{call_text} [非同步同步化死鎖危害]",
+                            category="FUNCTION_DEF",
+                            scope={"scope_id": curr_class or "scope:global", "file": file_path, "line": line_no},
+                            props={"hazard": "CSHARP_ASYNC_SYNC_DEADLOCK", "is_blocking": True},
+                        )
+                        graph.add_edge_rich(
+                            caller_id,
+                            hazard_id,
+                            edge_type="CALLS",
+                            status="BLOCKED_INVARIANT",
+                            detail=f"呼叫了 {call_text}，存在 UI 執行緒非同步死鎖風險",
+                        )
                     else:
-                        method_name = call_text.split(".")[-1]
-                        target_id = defs.get(call_text) or (defs.get(f"{curr_class}.{method_name}") if curr_class else None) or defs.get(method_name)
+                        # 3. 鏈式與 Null-conditional 調用正規化
+                        clean_call = call_text.replace("?.", ".").replace("!.", ".")
+                        method_name = clean_call.split(".")[-1]
+                        target_id = defs.get(clean_call) or (defs.get(f"{curr_class}.{method_name}") if curr_class else None) or defs.get(method_name)
 
                         if not target_id:
-                            ext_id = f"func:{call_text}@external"
+                            ext_id = f"func:{clean_call}@external"
                             if ext_id not in graph.g:
                                 graph.add_node_rich(
                                     node_id=ext_id,
-                                    label=f"{call_text} (External/BCL)",
+                                    label=f"{clean_call} (External/BCL)",
                                     category="FUNCTION_DEF",
                                     scope={"scope_id": "external", "file": file_path, "line": 0},
-                                    props={"signature": f"{call_text}()", "source_code": ""},
+                                    props={"signature": f"{clean_call}()", "source_code": ""},
                                 )
                             target_id = ext_id
 
