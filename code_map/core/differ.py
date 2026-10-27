@@ -480,6 +480,25 @@ class CodeMapDiffer:
         )
 
     @classmethod
+    def diff_source(
+        cls,
+        before_code: str,
+        after_code: str,
+        ext: str = ".py",
+        file_path: str = "",
+    ) -> CodeMapDiffResult:
+        """直接比對兩段原始碼字串之語意圖譜差分"""
+        from code_map.adapters import get_adapter_for_file
+
+        target_name = file_path if file_path else f"snippet{ext if ext.startswith('.') else '.' + ext}"
+        if not os.path.splitext(target_name)[1] and ext:
+            target_name = f"{target_name}{ext if ext.startswith('.') else '.' + ext}"
+        adapter = get_adapter_for_file(target_name)
+        g_before = adapter.parse_and_build(before_code, file_path=f"before/{target_name}")
+        g_after = adapter.parse_and_build(after_code, file_path=f"after/{target_name}")
+        return cls.diff_graphs(g_before, g_after)
+
+    @classmethod
     def diff_git_file(
         cls,
         repo_path: str,
@@ -490,7 +509,22 @@ class CodeMapDiffer:
         from code_map.adapters import get_adapter_for_file
 
         adapter = get_adapter_for_file(file_path)
-        rel_path = os.path.relpath(file_path, repo_path).replace("\\", "/")
+        abs_repo = os.path.abspath(repo_path)
+        abs_file_cwd = os.path.abspath(file_path)
+        if os.path.exists(abs_file_cwd) and os.path.commonpath([abs_repo, abs_file_cwd]) == abs_repo:
+            rel_path = os.path.relpath(abs_file_cwd, abs_repo).replace("\\", "/")
+            actual_disk_path = abs_file_cwd
+        else:
+            candidate_in_repo = os.path.abspath(os.path.join(abs_repo, file_path))
+            if os.path.commonpath([abs_repo, candidate_in_repo]) == abs_repo and (
+                os.path.exists(candidate_in_repo) or not os.path.isabs(file_path)
+            ):
+                rel_path = os.path.relpath(candidate_in_repo, abs_repo).replace("\\", "/")
+                actual_disk_path = candidate_in_repo
+            else:
+                rel_path = os.path.relpath(file_path, repo_path).replace("\\", "/")
+                actual_disk_path = file_path
+
         cmd_old = ["git", "-C", repo_path, "show", f"{diff_range}:{rel_path}"]
         res_old = subprocess.run(cmd_old, capture_output=True, text=True, encoding="utf-8", errors="replace")
         old_code = res_old.stdout if res_old.returncode == 0 else ""
@@ -499,8 +533,8 @@ class CodeMapDiffer:
             cmd_new = ["git", "-C", repo_path, "show", f"{target_ref}:{rel_path}"]
             res_new = subprocess.run(cmd_new, capture_output=True, text=True, encoding="utf-8", errors="replace")
             new_code = res_new.stdout if res_new.returncode == 0 else ""
-        elif os.path.exists(file_path):
-            with open(file_path, "r", encoding="utf-8") as f:
+        elif os.path.exists(actual_disk_path):
+            with open(actual_disk_path, "r", encoding="utf-8") as f:
                 new_code = f.read()
         else:
             cmd_new = ["git", "-C", repo_path, "show", f"HEAD:{rel_path}"]
