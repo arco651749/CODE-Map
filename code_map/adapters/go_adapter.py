@@ -1,4 +1,6 @@
 import bisect
+import hashlib
+import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 from tree_sitter import Language, Node, Parser
 import tree_sitter_go as tsgo
@@ -11,8 +13,9 @@ class GoCodeMapBuilder(BaseCodeMapBuilder):
     """
     基於 Tree-sitter TreeCursor 的高效穩定 Go 語意控制樹建構器
     - 採用 TreeCursor 走訪與位元組索引切片，避免 Windows C 擴充記憶體訪問越界 (Access Violation)
-    - 追蹤頂層函式 (func)、結構體接收器方法 (func (r *Receiver) Method)
-    - 識別 #CLI: main 進入點與 Goroutine 非同步調度
+    - 追蹤頂層函式 (func)、結構體接收器方法 (func (r *Receiver[T]) Method)、結構體 (struct)、介面 (interface) 與型別別名
+    - 解開並精確追蹤單行與群組化 const / var 規格 (const_spec, var_spec)
+    - 識別 #CLI: main 進入點、HTTP 路由註冊與 Goroutine 非同步調度
     - 偵測 panic() 未決恐慌與 time.Sleep() 同步阻塞危害 (Hazards)
     """
 
@@ -27,6 +30,32 @@ class GoCodeMapBuilder(BaseCodeMapBuilder):
     def __init__(self):
         self.language = Language(tsgo.language())
         self.parser = Parser(self.language)
+
+    def compute_executable_fingerprint(self, node: Optional[Node]) -> str:
+        """
+        Go 語意專用 Token 指紋計算器：
+        - 徹底剔除各類註解 (comment, line_comment, block_comment) 與純空白
+        - 保留結構體欄位 (struct fields)、結構體標籤 (raw_string_literal tags)、介面方法簽章 (interface methods)
+        - 保留常數/變數規格 (const_spec, var_spec) 與型別別名 (type_alias, type_spec)
+        - 產生正規化 SHA-256 雜湊
+        """
+        if not node:
+            return ""
+        tokens = []
+        stack = [node]
+        while stack:
+            curr = stack.pop()
+            if "comment" in curr.type:
+                continue
+            if not curr.children:
+                txt = curr.text.decode("utf-8", errors="replace").strip()
+                if txt:
+                    tokens.append(txt)
+            else:
+                stack.extend(reversed(curr.children))
+
+        combined = " ".join(tokens)
+        return hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
     def parse_and_build(self, source_code: str, file_path: str = "main.go") -> CodeMapGraph:
         # 保持 source_bytes 於局部變數生命週期內，防止 PyMalloc 記憶體重用
@@ -50,8 +79,24 @@ class GoCodeMapBuilder(BaseCodeMapBuilder):
             recv_node = node.child_by_field_name("receiver")
             if not recv_node:
                 return None
+            for child in recv_node.children:
+                if child.type == "parameter_declaration":
+                    t_node = child.child_by_field_name("type") or child
+                    while t_node:
+                        if t_node.type == "pointer_type":
+                            t_node = t_node.child_by_field_name("type") or (t_node.children[-1] if t_node.children else None)
+                        elif t_node.type == "generic_type":
+                            t_node = t_node.child_by_field_name("type") or (t_node.children[0] if t_node.children else None)
+                        elif t_node.type == "type_identifier":
+                            return decode_slice(t_node.start_byte, t_node.end_byte)
+                        else:
+                            for sub in child.children:
+                                if sub.type == "type_identifier":
+                                    return decode_slice(sub.start_byte, sub.end_byte)
+                            break
             raw = decode_slice(recv_node.start_byte, recv_node.end_byte)
-            parts = raw.strip("() ").split()
+            raw = re.sub(r"\[.*?\]", "", raw.strip("() "))
+            parts = raw.split()
             if len(parts) >= 2:
                 return parts[-1].lstrip("*& ")
             elif len(parts) == 1:
@@ -60,7 +105,15 @@ class GoCodeMapBuilder(BaseCodeMapBuilder):
 
         defs: Dict[str, str] = {}
 
-        # 階段 1：收集所有函式宣告與結構體接收器方法
+        def advance_skipping_children(cur) -> bool:
+            if cur.goto_next_sibling():
+                return True
+            while cur.goto_parent():
+                if cur.goto_next_sibling():
+                    return True
+            return False
+
+        # 階段 1：收集所有函式宣告、結構體接收器方法、型別與模組狀態
         cursor = tree.walk()
         while True:
             node = cursor.node
@@ -101,28 +154,119 @@ class GoCodeMapBuilder(BaseCodeMapBuilder):
                             "executable_fingerprint": self.compute_executable_fingerprint(node),
                         },
                     )
+                if advance_skipping_children(cursor):
+                    continue
+                break
 
-            elif ntype in ("const_declaration", "var_declaration"):
+            elif ntype in ("type_spec", "type_alias"):
+                name_node = node.child_by_field_name("name")
+                if name_node:
+                    raw_name = decode_slice(name_node.start_byte, name_node.end_byte)
+                    start_row = get_line(node.start_byte)
+                    end_row = get_line(node.end_byte)
+                    source_code_slice = decode_slice(node.start_byte, node.end_byte)
+                    node_id = f"type:{raw_name}@{file_path}:L{start_row}"
+
+                    type_kind = "alias" if ntype == "type_alias" else "type"
+                    if ntype == "type_spec":
+                        for sub in node.children:
+                            if sub.type == "struct_type":
+                                type_kind = "struct"
+                                break
+                            elif sub.type == "interface_type":
+                                type_kind = "interface"
+                                break
+
+                    defs[raw_name] = node_id
+
+                    graph.add_node_rich(
+                        node_id=node_id,
+                        label=raw_name,
+                        category="MODULE_STATE",
+                        scope={"scope_id": "scope:global", "file": file_path, "line": start_row},
+                        props={
+                            "signature": f"[{type_kind.capitalize()}] {raw_name}",
+                            "source_code": source_code_slice,
+                            "line_start": start_row,
+                            "line_end": end_row,
+                            "raw_name": raw_name,
+                            "type_kind": type_kind,
+                            "executable_fingerprint": self.compute_executable_fingerprint(node),
+                        },
+                    )
+                if advance_skipping_children(cursor):
+                    continue
+                break
+
+            elif ntype in ("const_spec", "var_spec"):
                 start_row = get_line(node.start_byte)
                 end_row = get_line(node.end_byte)
                 source_code_slice = decode_slice(node.start_byte, node.end_byte)
-                var_name = source_code_slice.split("\n")[0].split("=")[0].replace("const", "").replace("var", "").strip().split()[0] if source_code_slice else f"state_{start_row}"
-                var_name = var_name.strip("()")
-                if var_name:
+
+                p_type = node.parent.type if node.parent else ""
+                if p_type == "var_spec_list" and node.parent.parent:
+                    p_type = node.parent.parent.type
+                prefix = "const" if "const" in p_type else "var"
+
+                id_nodes = [c for c in node.children if c.type == "identifier"]
+                if not id_nodes:
+                    name_node = node.child_by_field_name("name")
+                    if name_node:
+                        id_nodes = [name_node]
+
+                fp = self.compute_executable_fingerprint(node)
+
+                if not id_nodes:
+                    var_name = f"{prefix}_{start_row}"
                     state_id = f"state:{var_name}@{file_path}:L{start_row}"
+                    defs[var_name] = state_id
                     graph.add_node_rich(
                         node_id=state_id,
                         label=var_name,
                         category="MODULE_STATE",
                         scope={"scope_id": "scope:global", "file": file_path, "line": start_row},
                         props={
-                            "signature": f"[Module State] {var_name}",
+                            "signature": f"[Module State] {prefix} {var_name}",
                             "source_code": source_code_slice,
                             "line_start": start_row,
                             "line_end": end_row,
-                            "executable_fingerprint": self.compute_executable_fingerprint(node),
-                        }
+                            "raw_name": var_name,
+                            "executable_fingerprint": fp,
+                        },
                     )
+                else:
+                    for id_n in id_nodes:
+                        var_name = decode_slice(id_n.start_byte, id_n.end_byte)
+                        if var_name == "_":
+                            type_n = node.child_by_field_name("type")
+                            val_n = node.child_by_field_name("value")
+                            extra = ""
+                            if type_n:
+                                extra = decode_slice(type_n.start_byte, type_n.end_byte).strip()
+                            if val_n:
+                                val_txt = decode_slice(val_n.start_byte, val_n.end_byte).strip()
+                                extra = f"{extra}={val_txt}" if extra else val_txt
+                            var_name = f"_ ({extra})" if extra else f"_{get_line(id_n.start_byte)}"
+
+                        state_id = f"state:{var_name}@{file_path}:L{start_row}"
+                        defs[var_name] = state_id
+                        graph.add_node_rich(
+                            node_id=state_id,
+                            label=var_name,
+                            category="MODULE_STATE",
+                            scope={"scope_id": "scope:global", "file": file_path, "line": start_row},
+                            props={
+                                "signature": f"[Module State] {prefix} {var_name}",
+                                "source_code": source_code_slice,
+                                "line_start": start_row,
+                                "line_end": end_row,
+                                "raw_name": var_name,
+                                "executable_fingerprint": fp,
+                            },
+                        )
+                if advance_skipping_children(cursor):
+                    continue
+                break
 
             if cursor.goto_first_child():
                 continue
@@ -232,6 +376,24 @@ class GoCodeMapBuilder(BaseCodeMapBuilder):
                             detail="調用標準庫或外部 Go 套件",
                             flow_type="ASYNC" if is_async else "SYNC",
                         )
+
+                        # 檢查是否為 HTTP 路由註冊或 Cobra 命令掛載 (e.g. router.GET, HandleFunc, AddCommand)
+                        ROUTER_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "Any", "HandleFunc", "Handle", "AddCommand"}
+                        if method_name in ROUTER_METHODS:
+                            args_node = node.child_by_field_name("arguments")
+                            if args_node:
+                                for arg in args_node.children:
+                                    if arg.type == "identifier":
+                                        arg_name = decode_slice(arg.start_byte, arg.end_byte)
+                                        if arg_name in defs and defs[arg_name] != target_def_id:
+                                            graph.add_edge_rich(
+                                                caller_id,
+                                                defs[arg_name],
+                                                edge_type="WIRES_TO" if method_name == "AddCommand" else "TRIGGERS",
+                                                status="VALID",
+                                                detail=f"註冊路由或指令處理常式: {arg_name}",
+                                                flow_type="SYNC",
+                                            )
 
             if cursor.goto_first_child():
                 continue
