@@ -24,6 +24,54 @@ class PythonCodeMapBuilder(BaseCodeMapBuilder):
         self.language = Language(tspy.language())
         self.parser = Parser(self.language)
 
+    def compute_state_fingerprint(self, node: Node) -> str:
+        """
+        提取狀態/欄位宣告 AST 中所有語意 Token 指紋（去除純註解）。
+        保留型別標註、變數名稱與指派值，以精確捕捉狀態與型別規格演進。
+        """
+        if not node:
+            return ""
+        import hashlib
+        tokens = []
+        stack = [node]
+        while stack:
+            curr = stack.pop()
+            if curr.type in ("comment", "line_comment", "block_comment") or "comment" in curr.type:
+                continue
+            if not curr.children:
+                txt = curr.text.decode("utf-8", errors="replace").strip()
+                if txt:
+                    tokens.append(txt)
+            else:
+                for c in reversed(curr.children):
+                    stack.append(c)
+        raw = " ".join(tokens)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _extract_var_name(self, node: Node) -> Optional[str]:
+        if node.type == "type_alias_statement":
+            name_node = node.child_by_field_name("name")
+            return name_node.text.decode("utf-8") if name_node else None
+        left_node = node.child_by_field_name("left")
+        if not left_node:
+            return None
+        if left_node.type == "identifier":
+            return left_node.text.decode("utf-8")
+        raw = left_node.text.decode("utf-8", errors="replace").strip()
+        # 若為 tuple/list 解構如 (A, B)，回傳去空白名稱
+        return " ".join(raw.split()) if raw else None
+
+    def _is_ui_control_assignment(self, node: Node) -> bool:
+        if node.type != "assignment":
+            return False
+        right_node = node.child_by_field_name("right")
+        if right_node and right_node.type == "call":
+            fn_child = right_node.child_by_field_name("function")
+            callee_text = fn_child.text.decode("utf-8") if fn_child else ""
+            widget_types = ("QPushButton", "QAction", "QWidget", "QMainWindow", "Button", "tk.Button", "ttk.Button")
+            return any(w in callee_text for w in widget_types)
+        return False
+
     def parse_and_build(self, source_code: str, file_path: str = "app.py") -> CodeMapGraph:
         tree = self.parser.parse(bytes(source_code, "utf-8"))
         graph = CodeMapGraph(name=f"Graph of {file_path}")
@@ -110,6 +158,7 @@ class PythonCodeMapBuilder(BaseCodeMapBuilder):
                 "depth": depth,
                 "defs": {},
                 "class_name": class_name,
+                "is_class_body": True,
             }
             # 同時在父作用域註冊該類別建構子
             class_node_id = f"class:{class_name}@{file_path}:L{start_line}"
@@ -141,20 +190,26 @@ class PythonCodeMapBuilder(BaseCodeMapBuilder):
                 "depth": depth,
                 "defs": {},
                 "class_name": cls_name,
+                "is_class_body": False,
             }
 
             func_node_id = f"func:{full_label}@{file_path}:L{start_line}"
             is_async = (node.children[0].type == "async" if node.children else False)
             params_node = node.child_by_field_name("parameters")
             param_text = params_node.text.decode("utf-8") if params_node else "()"
-            full_text = node.text.decode("utf-8")
+            
+            # 若函式帶有裝飾器，指紋與原始碼計算涵蓋整個 decorated_definition
+            outer_node = node.parent if (node.parent and node.parent.type == "decorated_definition") else node
+            full_text = outer_node.text.decode("utf-8")
+            disp_start_line = outer_node.start_point[0] + 1
+            disp_end_line = outer_node.end_point[0] + 1
+
             body_node = node.child_by_field_name("body")
             if body_node:
                 header_bytes = node.text[: body_node.start_byte - node.start_byte]
                 sig_text = " ".join(header_bytes.decode("utf-8", errors="replace").strip().rstrip(":").split())
             else:
                 sig_text = " ".join(full_text.split("\n")[0].strip().rstrip(":").split())
-            end_line = node.end_point[0] + 1
 
             scopes[current_scope_id]["defs"][func_name] = {
                 "node_id": func_node_id,
@@ -178,15 +233,65 @@ class PythonCodeMapBuilder(BaseCodeMapBuilder):
                     "inner_scope": new_scope_id,
                     "signature": sig_text,
                     "parameters": param_text,
-                    "line_start": start_line,
-                    "line_end": end_line,
-                    "line_count": end_line - start_line + 1,
+                    "line_start": disp_start_line,
+                    "line_end": disp_end_line,
+                    "line_count": disp_end_line - disp_start_line + 1,
                     "source_code": full_text,
-                    "executable_fingerprint": self.compute_executable_fingerprint(node),
+                    "executable_fingerprint": self.compute_executable_fingerprint(outer_node),
                 }
             )
 
             next_scope_id = new_scope_id
+
+        # 收集模組頂層狀態 (常數、字典、型別別名) 與類別層級欄位 (Class Fields / model_config)
+        elif node.type in ("assignment", "augmented_assignment", "type_alias_statement"):
+            if not self._is_ui_control_assignment(node):
+                if current_scope_id == "scope:global":
+                    var_name = self._extract_var_name(node)
+                    if var_name:
+                        start_line = node.start_point[0] + 1
+                        end_line = node.end_point[0] + 1
+                        state_nid = f"state:{var_name}@{file_path}:L{start_line}"
+                        raw_text = node.text.decode("utf-8")
+                        graph.add_node_rich(
+                            node_id=state_nid,
+                            label=var_name,
+                            category="MODULE_STATE",
+                            scope={"scope_id": "scope:global", "file": file_path, "line": start_line},
+                            props={
+                                "line_start": start_line,
+                                "line_end": end_line,
+                                "source_code": raw_text,
+                                "executable_fingerprint": self.compute_state_fingerprint(node),
+                            }
+                        )
+                        scopes[current_scope_id]["defs"][var_name] = {
+                            "node_id": state_nid,
+                            "declared_scope": current_scope_id,
+                            "line": start_line,
+                        }
+                elif scopes.get(current_scope_id, {}).get("is_class_body") is True:
+                    attr_name = self._extract_var_name(node)
+                    cls_name = scopes[current_scope_id].get("class_name")
+                    if attr_name and cls_name:
+                        start_line = node.start_point[0] + 1
+                        end_line = node.end_point[0] + 1
+                        full_label = f"{cls_name}.{attr_name}"
+                        state_nid = f"state:{full_label}@{file_path}:L{start_line}"
+                        raw_text = node.text.decode("utf-8")
+                        graph.add_node_rich(
+                            node_id=state_nid,
+                            label=full_label,
+                            category="MODULE_STATE",
+                            scope={"scope_id": current_scope_id, "file": file_path, "line": start_line, "qualified_path": cls_name},
+                            props={
+                                "line_start": start_line,
+                                "line_end": end_line,
+                                "source_code": raw_text,
+                                "signature": f"{attr_name} = ...",
+                                "executable_fingerprint": self.compute_state_fingerprint(node),
+                            }
+                        )
 
         for child in node.children:
             self._collect_scopes_and_functions(child, next_scope_id, scopes, code, file_path, graph)
@@ -251,7 +356,7 @@ class PythonCodeMapBuilder(BaseCodeMapBuilder):
             func_node = node.child_by_field_name("function")
             if func_node:
                 line = node.start_point[0] + 1
-                parent_node = self._find_enclosing_node_id(next_scope_id, graph)
+                parent_node = self._find_enclosing_node_id(next_scope_id, graph) or self._find_enclosing_state_id(node, graph)
 
                 if func_node.type == "attribute":
                     attr_name = func_node.child_by_field_name("attribute")
@@ -288,7 +393,7 @@ class PythonCodeMapBuilder(BaseCodeMapBuilder):
                         scope={"scope_id": next_scope_id, "file": file_path, "line": line},
                         props={"is_blocking": True, "hazard": "SYNC_BLOCKING_UI"}
                     )
-                    parent_node = self._find_enclosing_node_id(next_scope_id, graph)
+                    parent_node = self._find_enclosing_node_id(next_scope_id, graph) or self._find_enclosing_state_id(node, graph)
                     if parent_node:
                         graph.add_edge_rich(
                             source=parent_node,
@@ -300,7 +405,7 @@ class PythonCodeMapBuilder(BaseCodeMapBuilder):
                 elif func_node.type == "identifier":
                     pure_name = func_node.text.decode("utf-8")
                     if pure_name not in ("print", "len", "range", "isinstance", "int", "str"):
-                        parent_node = self._find_enclosing_node_id(next_scope_id, graph)
+                        parent_node = self._find_enclosing_node_id(next_scope_id, graph) or self._find_enclosing_state_id(node, graph)
                         self._link_handler_with_reachability(
                             caller_id=parent_node or f"scope:{next_scope_id}",
                             callee_name=pure_name,
@@ -311,6 +416,28 @@ class PythonCodeMapBuilder(BaseCodeMapBuilder):
                             graph=graph,
                             is_direct_trigger=False,
                         )
+
+        # 4. 偵測裝飾器內部呼叫 (例如 @router.get, @validator, @lru_cache)
+        if node.type == "decorator":
+            for c in node.children:
+                if c.type == "call":
+                    fn_child = c.child_by_field_name("function")
+                    if fn_child:
+                        callee_txt = fn_child.text.decode("utf-8")
+                        line = c.start_point[0] + 1
+                        parent_node = self._find_enclosing_node_id(next_scope_id, graph)
+                        pure_callee = callee_txt.split(".")[-1]
+                        if pure_callee not in ("on", "work", "classmethod", "staticmethod", "property", "override"):
+                            self._link_handler_with_reachability(
+                                caller_id=parent_node or f"scope:{next_scope_id}",
+                                callee_name=pure_callee,
+                                call_scope_id=next_scope_id,
+                                scopes=scopes,
+                                file_path=file_path,
+                                line=line,
+                                graph=graph,
+                                is_direct_trigger=False,
+                            )
 
         for child in node.children:
             self._wire_ui_and_calls(child, next_scope_id, scopes, code, file_path, graph)
@@ -589,6 +716,20 @@ class PythonCodeMapBuilder(BaseCodeMapBuilder):
                         status="VALID",
                         detail="引用全域或模組外部函式"
                     )
+
+    def _find_enclosing_state_id(self, node: Node, graph: CodeMapGraph) -> Optional[str]:
+        curr = node.parent
+        while curr:
+            if curr.type in ("assignment", "augmented_assignment", "type_alias_statement"):
+                var_name = self._extract_var_name(curr)
+                if var_name:
+                    for n, d in graph.g.nodes(data=True):
+                        if d.get("category") == "MODULE_STATE":
+                            lbl = d.get("label", "")
+                            if lbl == var_name or lbl.endswith(f".{var_name}"):
+                                return n
+            curr = curr.parent
+        return None
 
     def _find_enclosing_node_id(self, scope_id: str, graph: CodeMapGraph) -> Optional[str]:
         for n, d in graph.g.nodes(data=True):
