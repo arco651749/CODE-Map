@@ -161,6 +161,69 @@ class WorkspaceGraphBuilder:
                     if unresolved_nid in merged_graph.g and merged_graph.g.in_degree(unresolved_nid) == 0:
                         merged_graph.g.remove_node(unresolved_nid)
 
+        # Pass 2.5: Avalonia / WPF XAML (.axaml / .xaml) 與 C# (.cs) 跨檔案雙向縫合
+        cs_exports: Dict[str, Tuple[str, str]] = {}  # symbol_name -> (node_id, cs_file)
+        for rel_fp, single_g in file_graphs.items():
+            if rel_fp.endswith(".cs"):
+                for sym, nid in single_g.g.graph.get("exports", {}).items():
+                    cs_exports[sym] = (nid, rel_fp)
+
+        if cs_exports:
+            for rel_fp, single_g in file_graphs.items():
+                if not rel_fp.endswith((".axaml", ".xaml")):
+                    continue
+                for xb in single_g.g.graph.get("xaml_bindings", []):
+                    evt_id = xb["event_node_id"]
+                    placeholder_id = xb["placeholder_id"]
+                    target_name = xb["target_name"]
+                    is_hidden = xb.get("is_hidden", False)
+                    hidden_reason = xb.get("hidden_reason", "")
+
+                    matched = cs_exports.get(target_name)
+                    if not matched and target_name.endswith("Command"):
+                        # 嘗試匹配去除 Command 尾綴的方法名稱
+                        short_name = target_name[:-7]
+                        matched = cs_exports.get(short_name) or cs_exports.get(f"{short_name}Async")
+
+                    if matched:
+                        real_nid, cs_file = matched
+                        if merged_graph.g.has_edge(evt_id, placeholder_id):
+                            merged_graph.g.remove_edge(evt_id, placeholder_id)
+                        edge_status = "BLOCKED_VISIBILITY" if is_hidden else "VALID"
+                        merged_graph.add_edge_rich(
+                            source=evt_id,
+                            target=real_nid,
+                            edge_type="TRIGGERS",
+                            status=edge_status,
+                            detail=(
+                                f"💥 視覺樹遮蔽阻斷: {hidden_reason}"
+                                if is_hidden
+                                else f"跨檔 XAML 縫合: {rel_fp} ➔ {cs_file}:{target_name}"
+                            ),
+                        )
+                        # 清理 C# 單檔臨時生成的 #MVVM: 虛擬控制項錨點，由實體 XAML 控制項接管
+                        for in_u, _ in list(merged_graph.g.in_edges(real_nid)):
+                            if in_u.startswith("event:MVVM."):
+                                for ctrl_u, _ in list(merged_graph.g.in_edges(in_u)):
+                                    if ctrl_u.startswith("ctrl:#MVVM:"):
+                                        merged_graph.g.remove_node(ctrl_u)
+                                merged_graph.g.remove_node(in_u)
+
+                        if placeholder_id in merged_graph.g and merged_graph.g.in_degree(placeholder_id) == 0:
+                            merged_graph.g.remove_node(placeholder_id)
+                    else:
+                        # XAML 綁定了不存在的 Handler 或 Command -> 標記為 BLOCKED_SCOPE 斷路！
+                        if merged_graph.g.has_edge(evt_id, placeholder_id):
+                            merged_graph.g.edges[evt_id, placeholder_id]["status"] = "BLOCKED_SCOPE"
+                            merged_graph.g.edges[evt_id, placeholder_id]["detail"] = (
+                                f"💥 XAML 跨檔接線斷路: 在 C# Code-behind/ViewModel 中找不到 '{target_name}'！"
+                            )
+                            merged_graph.g.nodes[placeholder_id]["scope"] = {
+                                "scope_id": f"scope:missing_in_cs@{rel_fp}",
+                                "file": rel_fp,
+                                "line": xb.get("line", 1),
+                            }
+
         return merged_graph
 
     @classmethod

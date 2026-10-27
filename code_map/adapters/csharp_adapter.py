@@ -47,6 +47,8 @@ class CSharpCodeMapBuilder(BaseCodeMapBuilder):
             return source_bytes[start:end].decode("utf-8", errors="replace")
 
         defs: Dict[str, str] = {}
+        graph.g.graph["exports"] = {}
+        graph.g.graph["imports"] = []
 
         # 階段 1：收集類別宣告與方法/建構子定義
         cursor = tree.walk()
@@ -76,8 +78,21 @@ class CSharpCodeMapBuilder(BaseCodeMapBuilder):
                     sig = f"{fn_name}{params}"
                     source_code_slice = decode_slice(node.start_byte, node.end_byte)
 
+                    # 偵測 CommunityToolkit.Mvvm [RelayCommand] 裝飾器
+                    is_relay_cmd = "RelayCommand" in source_code_slice.split(raw_name)[0]
+                    base_cmd_name = raw_name[:-5] if (raw_name.endswith("Async") and len(raw_name) > 5) else raw_name
+                    relay_cmd_name = f"{base_cmd_name}Command" if is_relay_cmd else ""
+
                     defs[fn_name] = node_id
                     defs[raw_name] = node_id
+                    graph.g.graph["exports"][raw_name] = node_id
+                    graph.g.graph["exports"][fn_name] = node_id
+
+                    if is_relay_cmd:
+                        defs[relay_cmd_name] = node_id
+                        if curr_class:
+                            defs[f"{curr_class}.{relay_cmd_name}"] = node_id
+                        graph.g.graph["exports"][relay_cmd_name] = node_id
 
                     graph.add_node_rich(
                         node_id=node_id,
@@ -85,7 +100,7 @@ class CSharpCodeMapBuilder(BaseCodeMapBuilder):
                         category="FUNCTION_DEF",
                         scope={"scope_id": curr_class or "scope:global", "file": file_path, "line": start_row},
                         props={
-                            "signature": sig,
+                            "signature": f"[RelayCommand -> {relay_cmd_name}] {sig}" if is_relay_cmd else sig,
                             "parameters": params,
                             "source_code": source_code_slice,
                             "line_start": start_row,
@@ -93,6 +108,7 @@ class CSharpCodeMapBuilder(BaseCodeMapBuilder):
                             "line_count": max(1, end_row - start_row + 1),
                             "class_name": curr_class or "",
                             "raw_name": raw_name,
+                            "relay_command": relay_cmd_name,
                             "executable_fingerprint": self.compute_executable_fingerprint(node),
                         },
                     )
@@ -112,24 +128,40 @@ class CSharpCodeMapBuilder(BaseCodeMapBuilder):
                     var_name = var_name.split("{")[0].strip()
                 var_name = var_name.strip(";")
 
+                # 偵測 CommunityToolkit.Mvvm [ObservableProperty] 自動生成屬性 (例如 _userName -> UserName)
+                is_observable_prop = "ObservableProperty" in source_code_slice
+                generated_prop_name = ""
+                if is_observable_prop:
+                    clean_field = var_name.lstrip("_")
+                    if clean_field.startswith("m_") and len(clean_field) > 2:
+                        clean_field = clean_field[2:]
+                    if clean_field:
+                        generated_prop_name = clean_field[0].upper() + clean_field[1:]
+
                 state_id = f"state:{var_name}@{file_path}:L{start_row}"
-                category = "FUNCTION_DEF" if ntype == "property_declaration" and ("=>" in source_code_slice or "{" in source_code_slice) else "MODULE_STATE"
+                category = "FUNCTION_DEF" if (ntype == "property_declaration" and ("=>" in source_code_slice or "{" in source_code_slice)) or is_observable_prop else "MODULE_STATE"
                 graph.add_node_rich(
                     node_id=state_id,
-                    label=var_name,
+                    label=f"{var_name} (-> {generated_prop_name})" if generated_prop_name else var_name,
                     category=category,
                     scope={"scope_id": curr_class or "scope:global", "file": file_path, "line": start_row},
                     props={
-                        "signature": f"[{'Property' if ntype == 'property_declaration' else 'Module State'}] {var_name}",
+                        "signature": f"[ObservableProperty -> {generated_prop_name}] {var_name}" if is_observable_prop else f"[{'Property' if ntype == 'property_declaration' else 'Module State'}] {var_name}",
                         "source_code": source_code_slice,
                         "line_start": start_row,
                         "line_end": end_row,
                         "line_count": max(1, end_row - start_row + 1),
                         "class_name": curr_class or "",
                         "raw_name": var_name,
+                        "generated_property": generated_prop_name,
                         "executable_fingerprint": self.compute_executable_fingerprint(node),
                     }
                 )
+                defs[var_name] = state_id
+                graph.g.graph["exports"][var_name] = state_id
+                if generated_prop_name:
+                    defs[generated_prop_name] = state_id
+                    graph.g.graph["exports"][generated_prop_name] = state_id
 
             if cursor.goto_first_child():
                 continue
@@ -286,7 +318,34 @@ class CSharpCodeMapBuilder(BaseCodeMapBuilder):
                             if target_id:
                                 graph.add_edge_rich(evt_id, target_id, edge_type="TRIGGERS", status="VALID", detail="Avalonia AddHandler 事件接線")
 
-                    # 2. C# / GUI 同步執行緒凍結與阻斷危害偵測
+                    # 2. C# / GUI 同步執行緒凍結與跨執行緒 UI 存取危害偵測
+                    if call_text in ("Task.Run", "ThreadPool.QueueUserWorkItem") or call_text.endswith(".Task.Run"):
+                        full_inv_text = decode_slice(node.start_byte, node.end_byte)
+                        ui_mutation_markers = (
+                            ".Text =", ".Text=", ".Content =", ".Content=",
+                            ".IsVisible =", ".IsVisible=", ".Visibility =", ".Visibility=",
+                            ".Items.Add(", ".Items.Clear(", ".Children.Add(", ".InvalidateVisual(",
+                        )
+                        dispatcher_guards = (
+                            "Dispatcher.UIThread", "Dispatcher.Invoke", "Dispatcher.BeginInvoke",
+                        )
+                        if any(m in full_inv_text for m in ui_mutation_markers) and not any(g in full_inv_text for g in dispatcher_guards):
+                            hazard_id = f"hazard:CrossThreadUIAccess@{file_path}:L{line_no}"
+                            graph.add_node_rich(
+                                node_id=hazard_id,
+                                label=f"{call_text}() [跨執行緒直接操作 UI 崩潰危害]",
+                                category="FUNCTION_DEF",
+                                scope={"scope_id": curr_class or "scope:global", "file": file_path, "line": line_no},
+                                props={"hazard": "CSHARP_CROSS_THREAD_UI", "is_blocking": True},
+                            )
+                            graph.add_edge_rich(
+                                caller_id,
+                                hazard_id,
+                                edge_type="CALLS",
+                                status="BLOCKED_INVARIANT",
+                                detail="在背景執行緒 (Task.Run) 未經 Dispatcher.UIThread 直接存取或修改 UI 控制項，執行期將拋出 InvalidOperationException",
+                            )
+
                     if "Thread.Sleep" in call_text:
                         hazard_id = f"hazard:Thread.Sleep@{file_path}:L{line_no}"
                         graph.add_node_rich(
@@ -369,7 +428,33 @@ class CSharpCodeMapBuilder(BaseCodeMapBuilder):
             if not found:
                 break
 
-        # 階段 3：如果沒有 UI 控制項錨點，但存在 Main() 函式，自動註冊 CLI 程式入口
+        # 階段 3：自動為 [RelayCommand] 方法建立 MVVM 命令錨點（若尚未被其他 UI 控制項綁定）
+        for nid, ndata in list(graph.g.nodes(data=True)):
+            if ndata.get("category") == "FUNCTION_DEF":
+                relay_cmd = ndata.get("props", {}).get("relay_command", "")
+                if relay_cmd and graph.g.in_degree(nid) == 0:
+                    m_line = ndata.get("scope", {}).get("line", 1)
+                    curr_cls = ndata.get("props", {}).get("class_name", "")
+                    ctrl_id = f"ctrl:#MVVM:{relay_cmd}@{file_path}:L{m_line}"
+                    evt_id = f"event:MVVM.{relay_cmd}@{file_path}:L{m_line}"
+                    graph.add_node_rich(
+                        node_id=ctrl_id,
+                        label=f"#MVVM:{relay_cmd}",
+                        category="UI_CONTROL",
+                        scope={"scope_id": curr_cls or "scope:global", "file": file_path, "line": m_line},
+                        props={"ui_type": "MVVM RelayCommand", "line_start": m_line, "line_end": m_line},
+                    )
+                    graph.add_node_rich(
+                        node_id=evt_id,
+                        label=f"Execute ({relay_cmd})",
+                        category="EVENT_BINDING",
+                        scope={"scope_id": curr_cls or "scope:global", "file": file_path, "line": m_line},
+                        props={"event": "Command", "kind": "MVVM_COMMAND"},
+                    )
+                    graph.add_edge_rich(ctrl_id, evt_id, edge_type="WIRES_TO", status="VALID")
+                    graph.add_edge_rich(evt_id, nid, edge_type="TRIGGERS", status="VALID", detail=f"MVVM [RelayCommand] 觸發 {ndata.get('label')}")
+
+        # 階段 4：如果沒有 UI 控制項錨點，但存在 Main() 函式，自動註冊 CLI 程式入口
         if not graph.get_ui_anchors():
             main_nodes = [
                 n for n, d in graph.g.nodes(data=True)

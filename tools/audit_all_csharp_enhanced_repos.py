@@ -15,9 +15,9 @@ from code_map.core.differ import CodeMapDiffer
 CSHARP_REPOS = {
     "Avalonia": {
         "path": os.path.abspath(os.path.join(project_root, "test_repos", "Avalonia")),
-        "exts": (".cs",),
+        "exts": (".cs", ".axaml", ".xaml"),
         "exclude": ["tests", "samples", "benchmark", ".g.cs"],
-        "lang": "C# (Avalonia UI / 跨平台 GUI 樹)",
+        "lang": "C# + AXAML (Avalonia UI / 跨平台 GUI 視覺樹與 C#)",
     },
     "efcore": {
         "path": os.path.abspath(os.path.join(project_root, "test_repos", "efcore")),

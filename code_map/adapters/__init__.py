@@ -8,6 +8,7 @@ from code_map.adapters.rust_adapter import RustCodeMapBuilder
 from code_map.adapters.go_adapter import GoCodeMapBuilder
 from code_map.adapters.csharp_adapter import CSharpCodeMapBuilder
 from code_map.adapters.html_adapter import HTMLCodeMapBuilder
+from code_map.adapters.xaml_adapter import XAMLCodeMapBuilder
 
 
 class AdapterRegistry:
@@ -64,6 +65,7 @@ AdapterRegistry.register(RustCodeMapBuilder)
 AdapterRegistry.register(GoCodeMapBuilder)
 AdapterRegistry.register(CSharpCodeMapBuilder)
 AdapterRegistry.register(HTMLCodeMapBuilder)
+AdapterRegistry.register(XAMLCodeMapBuilder)
 
 
 def get_adapter_for_file(file_path: str) -> BaseCodeMapBuilder:
@@ -80,4 +82,5 @@ __all__ = [
     "GoCodeMapBuilder",
     "CSharpCodeMapBuilder",
     "HTMLCodeMapBuilder",
+    "XAMLCodeMapBuilder",
 ]
