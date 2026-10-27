@@ -124,8 +124,8 @@ class CSharpCodeMapBuilder(BaseCodeMapBuilder):
                 if name_node:
                     var_name = decode_slice(name_node.start_byte, name_node.end_byte)
                 else:
-                    var_name = source_code_slice.split("=")[0].strip().split()[-1] if "=" in source_code_slice else f"state_{start_row}"
-                    var_name = var_name.split("{")[0].strip()
+                    head_part = source_code_slice.split("=")[0].split("{")[0].strip().rstrip(";")
+                    var_name = head_part.split()[-1] if head_part.split() else f"state_{start_row}"
                 var_name = var_name.strip(";")
 
                 # 偵測 CommunityToolkit.Mvvm [ObservableProperty] 自動生成屬性 (例如 _userName -> UserName)
