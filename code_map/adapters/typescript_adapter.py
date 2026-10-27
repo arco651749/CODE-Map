@@ -1,3 +1,4 @@
+import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 from tree_sitter import Language, Node, Parser
 import tree_sitter_typescript as tsts
@@ -25,6 +26,29 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
         self.tsx_lang = Language(tsts.language_tsx())
         self.ts_parser = Parser(self.ts_lang)
         self.tsx_parser = Parser(self.tsx_lang)
+
+    def _compute_contract_fingerprint(self, node: Node) -> str:
+        """
+        提取 TypeScript 型別契約宣告 (interface / type alias / enum / ambient declare) 之去註解 Token 指紋。
+        不影響一般函式節點 (FUNCTION_DEF) 的參數型別去噪指紋。
+        """
+        if not node:
+            return ""
+        import hashlib
+        tokens = []
+        stack = [node]
+        while stack:
+            curr = stack.pop()
+            if "comment" in curr.type:
+                continue
+            if not curr.children:
+                txt = curr.text.decode("utf-8", errors="replace").strip()
+                if txt:
+                    tokens.append(txt)
+            else:
+                for c in reversed(curr.children):
+                    stack.append(c)
+        return hashlib.sha256(" ".join(tokens).encode("utf-8")).hexdigest()
 
     def parse_and_build(self, source_code: str, file_path: str = "app.ts") -> CodeMapGraph:
         is_tsx = file_path.endswith(".tsx") or "<" in source_code
@@ -75,6 +99,21 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
             if key:
                 return key.text.decode("utf-8").strip("'\"")
 
+        # 3.1 類別欄位函式: class Foo { bar = () => {} }
+        if parent.type in ("public_field_definition", "field_definition", "property_definition", "class_field"):
+            prop_node = parent.child_by_field_name("name") or parent.child_by_field_name("property")
+            if prop_node:
+                return prop_node.text.decode("utf-8").strip("'\"")
+            for c in parent.children:
+                if c.type in ("property_identifier", "identifier"):
+                    return c.text.decode("utf-8").strip("'\"")
+
+        # 3.2 預設匯出: export default () => {} 或 export default function() {}
+        if parent.type in ("export_statement", "export_declaration"):
+            for c in parent.children:
+                if c.type == "default":
+                    return "default"
+
         # 4. React HOCs 或包裝器調用:
         #    const Box = forwardRef((props, ref) => ...)
         #    const Box = memo(...)
@@ -101,6 +140,11 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                         clean = a.text.decode("utf-8").strip("'\"`")
                         if clean:
                             return f"directive:{clean}"
+
+            if call_expr.parent and call_expr.parent.type == "expression_statement":
+                short_fn = fn_name.split(".")[-1]
+                if short_fn in ("forEach", "map", "filter", "reduce", "then", "catch", "define", "it", "test", "describe", "ready", "each"):
+                    return f"{short_fn}:callback"
 
         return None
 
@@ -144,6 +188,80 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                             }
                         )
 
+        # 收集 export default 非函式表達式 (例如 export default { ... } 或 export default defineConfig(...))
+        if current_scope_id == "scope:global" and node.type in ("export_statement", "export_declaration"):
+            has_default = any(c.type == "default" for c in node.children)
+            if has_default:
+                val_node = node.child_by_field_name("value") or node.child_by_field_name("declaration")
+                if not val_node:
+                    for c in node.children:
+                        if c.type not in ("export", "default", ";", "comment"):
+                            val_node = c
+                            break
+                if val_node and val_node.type not in ("function_expression", "arrow_function", "function_declaration", "class_declaration"):
+                    start_line = node.start_point[0] + 1
+                    end_line = node.end_point[0] + 1
+                    state_nid = f"state:default@{file_path}:L{start_line}"
+                    raw_text = node.text.decode("utf-8")
+                    graph.add_node_rich(
+                        node_id=state_nid,
+                        label="default",
+                        category="MODULE_STATE",
+                        scope={"scope_id": "scope:global", "file": file_path, "line": start_line},
+                        props={
+                            "line_start": start_line,
+                            "line_end": end_line,
+                            "source_code": raw_text,
+                            "executable_fingerprint": self.compute_executable_fingerprint(val_node),
+                        }
+                    )
+                    graph.g.graph["exports"]["default"] = state_nid
+
+        # 收集模組頂層呼叫表達式 (例如 enyo.kind({...}), define([...]), Object.forEach(...))
+        if current_scope_id == "scope:global" and node.type == "expression_statement":
+            for child in node.children:
+                if child.type == "call_expression":
+                    fn_node = child.child_by_field_name("function")
+                    if fn_node:
+                        fn_name = fn_node.text.decode("utf-8")
+                        if not any(fn_name.endswith(ig) for ig in ("addEventListener", "removeEventListener", "console.log", "console.warn", "console.error", "console.info", "require")):
+                            start_line = child.start_point[0] + 1
+                            end_line = child.end_point[0] + 1
+                            call_nid = f"call:{fn_name}@{file_path}:L{start_line}"
+                            graph.add_node_rich(
+                                node_id=call_nid,
+                                label=f"{fn_name}()",
+                                category="MODULE_STATE",
+                                scope={"scope_id": "scope:global", "file": file_path, "line": start_line},
+                                props={
+                                    "line_start": start_line,
+                                    "line_end": end_line,
+                                    "source_code": child.text.decode("utf-8"),
+                                    "executable_fingerprint": self.compute_executable_fingerprint(child),
+                                }
+                            )
+
+        # 收集模組頂層控制流 (例如 scripts/ensure-pnpm.js 的 if (...), 或 Sortable.js 的 if (documentExists))
+        if current_scope_id == "scope:global" and node.type in ("if_statement", "try_statement"):
+            start_line = node.start_point[0] + 1
+            end_line = node.end_point[0] + 1
+            cond_node = node.child_by_field_name("condition")
+            cond_text = cond_node.text.decode("utf-8") if cond_node else node.type
+            clean_cond = " ".join(cond_text.split())[:25]
+            stmt_nid = f"guard:{node.type}@{file_path}:L{start_line}"
+            graph.add_node_rich(
+                node_id=stmt_nid,
+                label=f"{node.type}({clean_cond})",
+                category="MODULE_STATE",
+                scope={"scope_id": "scope:global", "file": file_path, "line": start_line},
+                props={
+                    "line_start": start_line,
+                    "line_end": end_line,
+                    "source_code": node.text.decode("utf-8"),
+                    "executable_fingerprint": self.compute_executable_fingerprint(node),
+                }
+            )
+
         if node.type == "import_statement":
             source_node = node.child_by_field_name("source")
             mod_path = source_node.text.decode("utf-8").strip("'\"`") if source_node else ""
@@ -173,6 +291,85 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                                 "module_specifier": mod_path,
                                 "line": line,
                             })
+
+        elif node.type in ("interface_declaration", "type_alias_declaration", "enum_declaration", "ambient_declaration"):
+            name_node = node.child_by_field_name("name")
+            if not name_node:
+                for c in node.children:
+                    if c.type in ("type_identifier", "identifier"):
+                        name_node = c
+                        break
+                    elif c.type in ("function_signature", "function_declaration", "class_declaration"):
+                        fn_n = c.child_by_field_name("name")
+                        if fn_n:
+                            name_node = fn_n
+                            break
+            type_name = name_node.text.decode("utf-8") if name_node else f"contract_L{node.start_point[0] + 1}"
+            start_line = node.start_point[0] + 1
+            end_line = node.end_point[0] + 1
+            parent_qual = scopes[current_scope_id].get("qualified_path", "global")
+            qual = f"{parent_qual}.{type_name}" if parent_qual != "global" else type_name
+            contract_nid = f"type:{qual}@{file_path}:L{start_line}"
+            raw_text = node.text.decode("utf-8")
+            graph.add_node_rich(
+                node_id=contract_nid,
+                label=type_name,
+                category="MODULE_STATE",
+                scope={"scope_id": current_scope_id, "file": file_path, "line": start_line, "qualified_path": parent_qual},
+                props={
+                    "signature": f"[TS Contract] {type_name}",
+                    "line_start": start_line,
+                    "line_end": end_line,
+                    "source_code": raw_text,
+                    "executable_fingerprint": self._compute_contract_fingerprint(node),
+                }
+            )
+
+        elif node.type in ("class_declaration", "abstract_class_declaration", "class"):
+            name_node = node.child_by_field_name("name")
+            class_name = name_node.text.decode("utf-8") if name_node else "AnonymousClass"
+            start_line = node.start_point[0] + 1
+            start_col = node.start_point[1] + 1
+            new_scope_id = f"scope:{class_name}@{file_path}:L{start_line}C{start_col}"
+            depth = scopes[current_scope_id]["depth"] + 1
+
+            parent_qual = scopes[current_scope_id].get("qualified_path", "global")
+            qual = class_name if parent_qual == "global" else f"{parent_qual}.{class_name}"
+
+            class_node_id = f"class:{class_name}@{file_path}:L{start_line}C{start_col}"
+            scopes[new_scope_id] = {
+                "id": new_scope_id,
+                "parent": current_scope_id,
+                "depth": depth,
+                "defs": {},
+                "func_node_id": class_node_id,
+                "qualified_path": qual,
+            }
+            next_scope_id = new_scope_id
+
+        elif node.type in ("public_field_definition", "field_definition", "property_definition"):
+            val_node = node.child_by_field_name("value")
+            name_node = node.child_by_field_name("name") or node.child_by_field_name("property")
+            field_name = name_node.text.decode("utf-8").strip("'\"") if name_node else "field"
+            if val_node and val_node.type not in ("function_expression", "arrow_function"):
+                start_line = node.start_point[0] + 1
+                end_line = node.end_point[0] + 1
+                parent_qual = scopes[current_scope_id].get("qualified_path", "global")
+                qual = f"{parent_qual}.{field_name}" if parent_qual != "global" else field_name
+                state_nid = f"field:{qual}@{file_path}:L{start_line}"
+                raw_text = node.text.decode("utf-8")
+                graph.add_node_rich(
+                    node_id=state_nid,
+                    label=field_name,
+                    category="MODULE_STATE",
+                    scope={"scope_id": current_scope_id, "file": file_path, "line": start_line, "qualified_path": parent_qual},
+                    props={
+                        "line_start": start_line,
+                        "line_end": end_line,
+                        "source_code": raw_text,
+                        "executable_fingerprint": self.compute_executable_fingerprint(node),
+                    }
+                )
 
         elif node.type in ("function_declaration", "generator_function_declaration"):
             func_name_node = node.child_by_field_name("name")
@@ -340,6 +537,9 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                     new_scope_id = f"scope:{method_name}@{file_path}:L{start_line}C{start_col}"
                     depth = scopes[current_scope_id]["depth"] + 1
 
+                    parent_qual = scopes[current_scope_id].get("qualified_path", "global")
+                    qual = method_name if parent_qual == "global" else f"{parent_qual}.{method_name}"
+
                     func_node_id = f"func:{method_name}@{file_path}:L{start_line}C{start_col}"
                     scopes[new_scope_id] = {
                         "id": new_scope_id,
@@ -347,6 +547,7 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                         "depth": depth,
                         "defs": {},
                         "func_node_id": func_node_id,
+                        "qualified_path": qual,
                     }
 
                     is_async = (b"async" in right.children[0].text if right.children else False)
@@ -370,7 +571,7 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                         node_id=func_node_id,
                         label=method_name,
                         category="FUNCTION_DEF",
-                        scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line},
+                        scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line, "qualified_path": parent_qual},
                         props={
                             "is_async": is_async,
                             "inner_scope": new_scope_id,
@@ -384,6 +585,24 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                         }
                     )
                     next_scope_id = new_scope_id
+            elif current_scope_id == "scope:global" and left:
+                var_name = left.text.decode("utf-8")
+                start_line = node.start_point[0] + 1
+                end_line = node.end_point[0] + 1
+                state_nid = f"state:{var_name}@{file_path}:L{start_line}"
+                raw_text = node.text.decode("utf-8")
+                graph.add_node_rich(
+                    node_id=state_nid,
+                    label=var_name,
+                    category="MODULE_STATE",
+                    scope={"scope_id": "scope:global", "file": file_path, "line": start_line},
+                    props={
+                        "line_start": start_line,
+                        "line_end": end_line,
+                        "source_code": raw_text,
+                        "executable_fingerprint": self.compute_executable_fingerprint(node),
+                    }
+                )
 
         elif node.type in ("method_definition", "pair"):
             key_node = node.child_by_field_name("name") or node.child_by_field_name("key")
@@ -396,6 +615,9 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                 new_scope_id = f"scope:{method_name}@{file_path}:L{start_line}C{start_col}"
                 depth = scopes[current_scope_id]["depth"] + 1
 
+                parent_qual = scopes[current_scope_id].get("qualified_path", "global")
+                qual = method_name if parent_qual == "global" else f"{parent_qual}.{method_name}"
+
                 func_node_id = f"func:{method_name}@{file_path}:L{start_line}C{start_col}"
                 scopes[new_scope_id] = {
                     "id": new_scope_id,
@@ -403,6 +625,7 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                     "depth": depth,
                     "defs": {},
                     "func_node_id": func_node_id,
+                    "qualified_path": qual,
                 }
 
                 is_async = (b"async" in target_func_node.children[0].text if target_func_node.children else False)
@@ -426,7 +649,7 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                     node_id=func_node_id,
                     label=method_name,
                     category="FUNCTION_DEF",
-                    scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line},
+                    scope={"scope_id": current_scope_id, "inner_scope": new_scope_id, "depth": depth - 1, "file": file_path, "line": start_line, "qualified_path": parent_qual},
                     props={
                         "is_async": is_async,
                         "inner_scope": new_scope_id,
@@ -483,6 +706,12 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                     next_scope_id = f"scope:{inferred_name}@{file_path}:L{start_line}C{start_col}"
                 else:
                     next_scope_id = f"scope:arrow@{file_path}:L{start_line}C{start_col}"
+            elif node.type in ("class_declaration", "abstract_class_declaration", "class"):
+                name_node = node.child_by_field_name("name")
+                class_name = name_node.text.decode("utf-8") if name_node else "AnonymousClass"
+                start_line = node.start_point[0] + 1
+                start_col = node.start_point[1] + 1
+                next_scope_id = f"scope:{class_name}@{file_path}:L{start_line}C{start_col}"
 
         # 1. 偵測 React TSX JSX 元素: <button onClick={handleDelete}>
         if node.type == "jsx_element" or node.type == "jsx_self_closing_element":
@@ -714,8 +943,30 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
             h_line = handler_arg.start_point[0] + 1
             h_col = handler_arg.start_point[1] + 1
             arrow_scope_id = f"scope:arrow@{file_path}:L{h_line}C{h_col}"
+            handler_func_id = f"func:{obj_name}.on('{event_name}')@{file_path}:L{h_line}C{h_col}"
             if arrow_scope_id in scopes:
-                scopes[arrow_scope_id]["func_node_id"] = event_node_id
+                scopes[arrow_scope_id]["func_node_id"] = handler_func_id
+
+            graph.add_node_rich(
+                node_id=handler_func_id,
+                label=f"{obj_name}.on('{event_name}')",
+                category="FUNCTION_DEF",
+                scope={"scope_id": current_scope_id, "inner_scope": arrow_scope_id, "file": file_path, "line": h_line},
+                props={
+                    "line_start": h_line,
+                    "line_end": handler_arg.end_point[0] + 1,
+                    "source_code": handler_arg.text.decode("utf-8"),
+                    "executable_fingerprint": self.compute_executable_fingerprint(handler_arg),
+                }
+            )
+            graph.add_edge_rich(
+                source=event_node_id,
+                target=handler_func_id,
+                edge_type="TRIGGERS",
+                flow_type="SYNC",
+                status="VALID",
+                detail="觸發內嵌事件處理函式"
+            )
 
     def _resolve_call_site(
         self,
