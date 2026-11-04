@@ -362,7 +362,8 @@ class CSharpCodeMapBuilder(BaseCodeMapBuilder):
                             status="BLOCKED_INVARIANT",
                             detail="呼叫了 Thread.Sleep() 同步阻塞 UI 執行緒",
                         )
-                    elif any(call_text.endswith(k) for k in (".GetAwaiter().GetResult", ".Wait", ".Result")) or ".GetAwaiter().GetResult" in call_text:
+                    elif ((any(call_text.endswith(k) for k in (".GetAwaiter().GetResult", ".Wait", ".Result")) or ".GetAwaiter().GetResult" in call_text)
+                          and not call_text.startswith("CommandResult.")):
                         hazard_id = f"hazard:AsyncSyncDeadlock@{file_path}:L{line_no}"
                         graph.add_node_rich(
                             node_id=hazard_id,
