@@ -21,6 +21,10 @@ class AdapterRegistry:
     _instances: Dict[str, BaseCodeMapBuilder] = {}
 
     @classmethod
+    def get_registry(cls) -> Dict[str, Type[BaseCodeMapBuilder]]:
+        return cls._registry
+
+    @classmethod
     def register(cls, adapter_cls: Type[BaseCodeMapBuilder]):
         dummy = adapter_cls()
         for ext in dummy.supported_extensions:
