@@ -759,16 +759,14 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                                 target=guard_id,
                                 edge_type="CALLS",
                                 status="VALID",
+                                sequence_order=line,
                                 detail="建立防洩漏銷毀清理守衛"
                             )
-
-            elif fn_node and fn_node.type == "member_expression":
-                prop = fn_node.child_by_field_name("property")
-                obj = fn_node.child_by_field_name("object")
-                prop_name = prop.text.decode("utf-8") if prop else ""
-                if prop_name not in ("log", "split", "trim", "charAt", "substr", "indexOf", "push", "filter", "map", "forEach", "slice", "concat"):
-                    is_awaited = (node.parent and node.parent.type == "await_expression")
-                    self._resolve_call_site(node, prop_name, next_scope_id, scopes, file_path, graph, is_awaited)
+                    else:
+                        prop_name = method_name
+                        if prop_name not in ("log", "split", "trim", "charAt", "substr", "indexOf", "push", "filter", "map", "forEach", "slice", "concat"):
+                            is_awaited = (node.parent and node.parent.type == "await_expression")
+                            self._resolve_call_site(node, prop_name, next_scope_id, scopes, file_path, graph, is_awaited)
 
             elif fn_node and fn_node.type == "identifier":
                 callee_name = fn_node.text.decode("utf-8")
@@ -1060,6 +1058,7 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                     edge_type=edge_type,
                     flow_type=flow_type,
                     status="VALID",
+                    sequence_order=line,
                     detail=f"作用域可達 (定義於 {declaring_scope_id})",
                     is_conditional=is_conditional,
                     guard_type=guard_type,
@@ -1085,6 +1084,7 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                             edge_type=edge_type,
                             flow_type=flow_type,
                             status="VALID",
+                            sequence_order=line,
                             detail=f"作用域可達 (定義於模組頂層 {isolated_scope_id})",
                             is_conditional=is_conditional,
                             guard_type=guard_type,
@@ -1098,6 +1098,7 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                             edge_type=edge_type,
                             flow_type=flow_type,
                             status="BLOCKED_SCOPE",
+                            sequence_order=line,
                             detail=f"💥 作用域阻隔: 函式 '{callee_name}' 被深鎖在內部閉包 ({isolated_scope_id})，外部無法調用！",
                             is_conditional=is_conditional,
                             guard_type=guard_type,
@@ -1121,6 +1122,7 @@ class TypeScriptCodeMapBuilder(BaseCodeMapBuilder):
                         edge_type=edge_type,
                         flow_type=flow_type,
                         status="VALID",
+                        sequence_order=line,
                         detail="引用全域或外部函式",
                         is_conditional=is_conditional,
                         guard_type=guard_type,

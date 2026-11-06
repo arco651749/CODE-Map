@@ -690,16 +690,10 @@ class JavaScriptCodeMapBuilder(BaseCodeMapBuilder):
             if fn_node and fn_node.type == "member_expression":
                 prop = fn_node.child_by_field_name("property")
                 obj = fn_node.child_by_field_name("object")
-                if prop and prop.text.decode("utf-8") == "addEventListener":
-                    self._handle_add_event_listener(node, obj, next_scope_id, scopes, file_path, graph)
-
-            elif fn_node and fn_node.type == "member_expression":
-                prop = fn_node.child_by_field_name("property")
-                obj = fn_node.child_by_field_name("object")
                 prop_name = prop.text.decode("utf-8") if prop else ""
                 
-                # 支援 .on('click', ...), .bind('event', ...), $delegate(...)
-                if prop_name in ("on", "bind", "delegate", "live"):
+                # 支援 addEventListener, .on('click', ...), .bind('event', ...), $delegate(...)
+                if prop_name == "addEventListener" or prop_name in ("on", "bind", "delegate", "live"):
                     self._handle_add_event_listener(node, obj, next_scope_id, scopes, file_path, graph)
                 elif prop_name not in ("log", "split", "trim", "charAt", "substr", "indexOf", "push", "filter", "map", "forEach"):
                     is_awaited = (node.parent and node.parent.type == "await_expression")
@@ -1029,6 +1023,7 @@ class JavaScriptCodeMapBuilder(BaseCodeMapBuilder):
                     edge_type=edge_type,
                     flow_type=flow_type,
                     status="VALID",
+                    sequence_order=line,
                     detail=f"作用域可達 (定義於 {declaring_scope_id})",
                     is_conditional=is_conditional,
                     guard_type=guard_type,
@@ -1054,6 +1049,7 @@ class JavaScriptCodeMapBuilder(BaseCodeMapBuilder):
                             edge_type=edge_type,
                             flow_type=flow_type,
                             status="VALID",
+                            sequence_order=line,
                             detail=f"作用域可達 (定義於模組頂層 {isolated_scope_id})",
                             is_conditional=is_conditional,
                             guard_type=guard_type,
@@ -1067,6 +1063,7 @@ class JavaScriptCodeMapBuilder(BaseCodeMapBuilder):
                             edge_type=edge_type,
                             flow_type=flow_type,
                             status="BLOCKED_SCOPE",
+                            sequence_order=line,
                             detail=f"💥 作用域阻隔: 函式 '{callee_name}' 被深鎖在內部閉包 ({isolated_scope_id})，外部無法調用！",
                             is_conditional=is_conditional,
                             guard_type=guard_type,
@@ -1090,6 +1087,7 @@ class JavaScriptCodeMapBuilder(BaseCodeMapBuilder):
                         edge_type=edge_type,
                         flow_type=flow_type,
                         status="VALID",
+                        sequence_order=line,
                         detail="引用全域或外部函式",
                         is_conditional=is_conditional,
                         guard_type=guard_type,

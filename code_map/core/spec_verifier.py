@@ -224,18 +224,28 @@ class SpecVerifier:
             if not paths_to_u or not paths_to_v:
                 continue
 
-            # 取從 anc 出發的第一條邊序號
             p_u = paths_to_u[0]
             p_v = paths_to_v[0]
-            edge_u_data = actual_graph.g.get_edge_data(p_u[0], p_u[1]) or {}
-            edge_v_data = actual_graph.g.get_edge_data(p_v[0], p_v[1]) or {}
+
+            # 找到兩條路徑從 anc 開始的最深共同祖先分歧點 (Branching Node)
+            min_len = min(len(p_u), len(p_v))
+            div_idx = 0
+            while div_idx < min_len - 1 and p_u[div_idx + 1] == p_v[div_idx + 1]:
+                div_idx += 1
+
+            div_node = p_u[div_idx]
+            next_u = p_u[div_idx + 1]
+            next_v = p_v[div_idx + 1]
+
+            edge_u_data = actual_graph.g.get_edge_data(div_node, next_u) or {}
+            edge_v_data = actual_graph.g.get_edge_data(div_node, next_v) or {}
             order_u = edge_u_data.get("sequence_order", 1)
             order_v = edge_v_data.get("sequence_order", 1)
 
             if order_u <= order_v:
                 return True, None
             else:
-                return False, f"共同祖先 `{anc}` 內部執行偏序倒置 (order({u})={order_u} > order({v})={order_v})"
+                return False, f"共同祖先 `{div_node}` 內部執行偏序倒置 (order({u})={order_u} > order({v})={order_v})"
 
         return True, None
 
