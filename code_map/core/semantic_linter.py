@@ -232,11 +232,20 @@ class SemanticLinter:
             cfg = json.load(f)
 
         if gatekeeper_override:
-            cfg.setdefault("Gatekeeper", {})["Provider"] = gatekeeper_override
-            cfg["Gatekeeper"]["Enabled"] = gatekeeper_override != "Disabled"
+            gk_cfg = cfg.setdefault("Gatekeeper", {})
+            if gatekeeper_override != gk_cfg.get("Provider"):
+                gk_cfg.pop("Endpoint", None)
+                gk_cfg.pop("Model", None)
+            gk_cfg["Provider"] = gatekeeper_override
+            gk_cfg["Enabled"] = gatekeeper_override != "Disabled"
         if explainer_override:
-            cfg.setdefault("Explainer", {})["Provider"] = explainer_override
-            cfg["Explainer"]["Enabled"] = explainer_override != "Disabled"
+            exp_cfg = cfg.setdefault("Explainer", {})
+            if explainer_override != exp_cfg.get("Provider"):
+                exp_cfg.pop("EndpointOrCommand", None)
+                if not explainer_model_override:
+                    exp_cfg.pop("Model", None)
+            exp_cfg["Provider"] = explainer_override
+            exp_cfg["Enabled"] = explainer_override != "Disabled"
         if explainer_model_override:
             cfg.setdefault("Explainer", {})["Model"] = explainer_model_override
 
@@ -256,14 +265,15 @@ class SemanticLinter:
         # Topology check for UI domain (exclude CLI Entry anchors from GUI UI-thread rules)
         ui_cats = {"UI_CONTROL", "DOM_ELEMENT", "EVENT_BINDING"}
         def _is_gui_node(nid: str) -> bool:
-            if "cli" in nid.lower():
+            nid_low = nid.lower()
+            if nid_low.startswith(("ctrl:#cli:", "event:cli.")):
                 return False
             nd = graph.g.nodes.get(nid, {})
             if nd.get("category") not in ui_cats:
                 return False
             ui_type = str(nd.get("props", {}).get("ui_type", "")).lower()
             label = str(nd.get("label", "")).lower()
-            return "cli" not in ui_type and not label.startswith("#cli")
+            return "cli" not in ui_type.split() and not label.startswith("#cli:")
 
         if _is_gui_node(node_id):
             domains.add("UI")

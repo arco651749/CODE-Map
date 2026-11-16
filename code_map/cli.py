@@ -12,6 +12,50 @@ from code_map.core.spec_verifier import SpecVerifier, verify_objection
 from code_map.core.workspace_graph import WorkspaceGraphBuilder
 
 
+def _run_ai_lint(graph, args, target_node_ids=None) -> bool:
+    """Execute hybrid Decision + LLM semantic lint with Fail-Open guarantee. Returns True only when blocked in strict mode."""
+    from code_map.core.semantic_linter import SemanticLinter
+
+    try:
+        linter = SemanticLinter.from_file(
+            rules_path=args.rules,
+            gatekeeper_override=args.gatekeeper,
+            explainer_override=args.explainer,
+            explainer_model_override=args.lint_model,
+            api_key_override=args.api_key,
+        )
+        effective_targets = target_node_ids
+        if args.lint_symbol:
+            kw = args.lint_symbol.lower()
+            pool = effective_targets if effective_targets is not None else list(graph.g.nodes)
+            effective_targets = [
+                n for n in pool
+                if kw in str(graph.g.nodes[n].get("label", "")).lower() or kw in n.lower()
+            ]
+        lint_report = linter.lint_graph(
+            graph,
+            target_node_ids=effective_targets,
+            max_nodes=args.max_lint_nodes,
+        )
+        print("\n" + lint_report.to_markdown(show_all_decisions=args.show_all_decisions))
+        if args.lint_json:
+            with open(args.lint_json, "w", encoding="utf-8") as f:
+                json.dump(lint_report.to_dict(), f, ensure_ascii=False, indent=2)
+            print(f"\n📦 AI Lint 完整報告已導出至: {args.lint_json}")
+        return bool(args.strict and lint_report.has_blocks)
+    except Exception as exc:
+        print(f"\n⚠️ [AI-LINT-SERVICE-WARN] AI Lint 啟動失敗 ({exc})，已安全略過，不阻斷 CODE-Map。")
+        return False
+
+
+def _extract_diff_target_nodes(diff_res):
+    """Collect node IDs in diff_res.g_after that were added or semantically modified."""
+    changed_cids = set(diff_res.nodes_added) | {
+        f["canonical_id"] for f in diff_res.functions_modified if "canonical_id" in f
+    }
+    return [nid for nid, cid in diff_res.canon_map_a.items() if cid in changed_cids]
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="🌲 CODE-Map: Causal Operation & Dependency Evaluation Map (行為因果與接線依賴評估地圖引擎)"
@@ -96,7 +140,15 @@ def main():
         diff_res = CodeMapDiffer.diff_graphs(g_b, g_a)
         print("\n" + diff_res.to_diff_markdown())
 
-        if args.check and not diff_res.passed:
+        ai_lint_blocked = False
+        if args.ai_lint:
+            changed_nodes = _extract_diff_target_nodes(diff_res)
+            if changed_nodes:
+                ai_lint_blocked = _run_ai_lint(diff_res.g_after, args, target_node_ids=changed_nodes)
+            else:
+                print("\n🤖 === CODE-Map AI Semantic Lint ===\n• 沒有新增或語意變動的函式節點，已略過 AI Lint (0 Token)。")
+
+        if (args.check and not diff_res.passed) or ai_lint_blocked:
             sys.exit(1)
         return
 
@@ -109,7 +161,16 @@ def main():
             diff_range=args.git_diff
         )
         print("\n" + diff_res.to_diff_markdown())
-        if args.check and not diff_res.passed:
+
+        ai_lint_blocked = False
+        if args.ai_lint:
+            changed_nodes = _extract_diff_target_nodes(diff_res)
+            if changed_nodes:
+                ai_lint_blocked = _run_ai_lint(diff_res.g_after, args, target_node_ids=changed_nodes)
+            else:
+                print("\n🤖 === CODE-Map AI Semantic Lint ===\n• 沒有新增或語意變動的函式節點，已略過 AI Lint (0 Token)。")
+
+        if (args.check and not diff_res.passed) or ai_lint_blocked:
             sys.exit(1)
         return
 
@@ -185,37 +246,7 @@ def main():
             out_path = reporter.generate(graph, args.html, file_path=args.file)
             print(f"\n🌲 [HTML 雙欄因果儀表板已輸出至]: {out_path}")
 
-        ai_lint_blocked = False
-        if args.ai_lint:
-            from code_map.core.semantic_linter import SemanticLinter
-            try:
-                linter = SemanticLinter.from_file(
-                    rules_path=args.rules,
-                    gatekeeper_override=args.gatekeeper,
-                    explainer_override=args.explainer,
-                    explainer_model_override=args.lint_model,
-                    api_key_override=args.api_key,
-                )
-                target_nodes = None
-                if args.lint_symbol:
-                    kw = args.lint_symbol.lower()
-                    target_nodes = [
-                        n for n, d in graph.g.nodes(data=True)
-                        if kw in str(d.get("label", "")).lower() or kw in n.lower()
-                    ]
-                lint_report = linter.lint_graph(
-                    graph,
-                    target_node_ids=target_nodes,
-                    max_nodes=args.max_lint_nodes,
-                )
-                print("\n" + lint_report.to_markdown(show_all_decisions=args.show_all_decisions))
-                if args.lint_json:
-                    with open(args.lint_json, "w", encoding="utf-8") as f:
-                        json.dump(lint_report.to_dict(), f, ensure_ascii=False, indent=2)
-                    print(f"\n📦 AI Lint 完整報告已導出至: {args.lint_json}")
-                ai_lint_blocked = args.strict and lint_report.has_blocks
-            except Exception as exc:
-                print(f"\n⚠️ [AI-LINT-SERVICE-WARN] AI Lint 啟動失敗 ({exc})，已安全略過，不阻斷 CODE-Map。")
+        ai_lint_blocked = _run_ai_lint(graph, args) if args.ai_lint else False
 
         if (args.check and not inv["passed"]) or ai_lint_blocked:
             sys.exit(1)

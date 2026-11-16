@@ -619,7 +619,10 @@ class CliExplainer(BaseExplainerProvider):
 
     def __init__(self, provider_type: str, cfg: Dict[str, Any]):
         self.provider_name = provider_type
-        self.command = cfg.get("EndpointOrCommand", "") or {
+        raw_cmd = str(cfg.get("EndpointOrCommand", "") or "").strip()
+        if raw_cmd.startswith(("http://", "https://")):
+            raw_cmd = ""
+        self.command = raw_cmd or {
             "AgyCli": "agy",
             "ClaudeCli": "claude",
             "CodexCli": "codex",

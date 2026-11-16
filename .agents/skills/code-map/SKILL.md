@@ -92,6 +92,20 @@ Export a standalone interactive HTML dashboard linking the causal topology tree 
 python.exe -X utf8 "d:\AntiGravity\UIA_Coder\codemap.py" --file src/app.py --html reports/dashboard.html
 ```
 
+### F. Hybrid Decision API + LLM Semantic Lint (`--ai-lint`)
+Run a **Fail-Open** two-stage semantic review (`Gatekeeper` Decision API -> `Explainer` LLM) on top of deterministic CODE-Map analysis, using externalized rules in `rules/codemap_lint_rules.json`:
+
+```powershell
+# Inspect a file (or combine with --git-diff to inspect only newly added/modified functions)
+python.exe -X utf8 "d:\AntiGravity\UIA_Coder\codemap.py" --repo . --file src/app.py --git-diff HEAD~1 --ai-lint
+
+# Override Explainer backend (e.g., local AgyCli / Ollama) and export full JSON report
+python.exe -X utf8 "d:\AntiGravity\UIA_Coder\codemap.py" --file src/app.py --ai-lint --explainer AgyCli --show-all-decisions --lint-json reports/ai_lint.json
+
+# Strict gate for CI / Subagent review (exits 1 only when a BLOCK violation is detected; service errors never block)
+python.exe -X utf8 "d:\AntiGravity\UIA_Coder\codemap.py" --file src/app.py --check --ai-lint --strict
+```
+
 ---
 
 ## 3. Programmatic Python API Usage
