@@ -93,18 +93,112 @@ python.exe -X utf8 "d:\AntiGravity\UIA_Coder\codemap.py" --file src/app.py --htm
 ```
 
 ### F. Hybrid Decision API + LLM Semantic Lint (`--ai-lint`)
-Run a **Fail-Open** two-stage semantic review (`Gatekeeper` Decision API -> `Explainer` LLM) on top of deterministic CODE-Map analysis, using externalized rules in `rules/codemap_lint_rules.json`:
+Run a **Fail-Open** two-stage semantic review (`Gatekeeper` Decision API -> `Explainer` LLM) on top of deterministic CODE-Map analysis, using externalized rules in `rules/codemap_lint_rules.json`.
+
+> **CRITICAL — Output & Exit Code Semantics:**
+> - `驗收裁決: 🟢 READY_TO_SHIP` reflects **ONLY** deterministic AST/topology checks (`check_invariants()`), **NOT** `--ai-lint`!
+> - By default (`WarningOnly`), `--ai-lint` exits `0` even if `🔴 BLOCK` violations are found. **You MUST pass `--strict` to exit `1` on `🔴 BLOCK` violations.**
+> - On API key absence, network timeout, or provider failure, `--ai-lint` **Fails Open** (prints `⚠️ [AI-LINT-SERVICE-WARN]` and exits `0` so it never blocks deterministic CODE-Map). Never confuse Fail-Open with passing semantic lint!
+> - **Node Cap (`--max-lint-nodes`)**: Default is `15` nodes per invocation. For large files, always prefer `--git-diff HEAD~1 --ai-lint` or `--lint-symbol <name>`, or raise `--max-lint-nodes`.
+
+**Prerequisites & Provider Selection:**
+- Default `Gatekeeper` = `GeminiDecision` (`gemini-decision-1`) and default `Explainer` = `GeminiHttp` (`gemini-3.1-flash-lite`); both read `$env:GOOGLE_API_KEY` (or `--api-key <KEY>`).
+- **No-API-Key / Local CLI Mode**: Override `Gatekeeper` to `Disabled` and `Explainer` to `AgyCli` (uses local `agy` CLI) or `Ollama`. Note that `AgyCli` spawns a local CLI process (~8–10s per node), so always pair it with `--lint-symbol` or `--git-diff`:
+  - Supported `Gatekeeper` (`--gatekeeper`): `GeminiDecision`, `OpenAiCompatible`, `HttpTemplate`, `Disabled`
+  - Supported `Explainer` (`--explainer`): `GeminiHttp`, `AgyCli`, `ClaudeCli`, `CodexCli`, `Ollama`, `OpenAiCompatible`, `CustomCli`, `Disabled`
 
 ```powershell
-# Inspect a file (or combine with --git-diff to inspect only newly added/modified functions)
-python.exe -X utf8 "d:\AntiGravity\UIA_Coder\codemap.py" --repo . --file src/app.py --git-diff HEAD~1 --ai-lint
+# 1. Diff-scoped lint (recommended: inspects only added/modified functions in git diff)
+python.exe -X utf8 "d:\AntiGravity\UIA_Coder\codemap.py" --repo . --file src/app.py --git-diff HEAD~1 --ai-lint --strict
 
-# Override Explainer backend (e.g., local AgyCli / Ollama) and export full JSON report
-python.exe -X utf8 "d:\AntiGravity\UIA_Coder\codemap.py" --file src/app.py --ai-lint --explainer AgyCli --show-all-decisions --lint-json reports/ai_lint.json
+# 2. Full strict check with explicit API key and JSON report export
+python.exe -X utf8 "d:\AntiGravity\UIA_Coder\codemap.py" --file src/app.py --check --ai-lint --strict --api-key "$env:GOOGLE_API_KEY" --lint-json reports/ai_lint.json
 
-# Strict gate for CI / Subagent review (exits 1 only when a BLOCK violation is detected; service errors never block)
-python.exe -X utf8 "d:\AntiGravity\UIA_Coder\codemap.py" --file src/app.py --check --ai-lint --strict
+# 3. Local CLI / Offline mode (no GOOGLE_API_KEY needed)
+python.exe -X utf8 "d:\AntiGravity\UIA_Coder\codemap.py" --file src/app.py --ai-lint --gatekeeper Disabled --explainer AgyCli --lint-model gemini-3.8-flash-low
+
+# 4. Target specific symbol & print all Decision API probabilities (including PASS)
+python.exe -X utf8 "d:\AntiGravity\UIA_Coder\codemap.py" --file src/app.py --ai-lint --lint-symbol handleDelete --show-all-decisions --rules rules/custom_rules.json
 ```
+
+**All AI Lint CLI Flags:**
+| Flag | Default | Purpose |
+| :--- | :--- | :--- |
+| `--ai-lint` | `false` | Enable two-stage semantic lint (`Gatekeeper` -> `Explainer`) |
+| `--strict` | `false` | Exit `1` when any rule reaches `🔴 BLOCK` (service errors still Fail-Open) |
+| `--rules <path>` | `rules/codemap_lint_rules.json` | Path to external JSON config & rules file |
+| `--gatekeeper <name>` | `GeminiDecision` | Override Gatekeeper provider (`Disabled` skips Stage 1) |
+| `--explainer <name>` | `GeminiHttp` | Override Explainer provider (`Disabled` skips Stage 2) |
+| `--lint-model <name>` | Provider default | Override Explainer LLM model (e.g. `gemini-3.8-flash-low`, `qwen2.5-coder:7b`) |
+| `--api-key <key>` | `$GOOGLE_API_KEY` | Explicit API key override |
+| `--lint-symbol <kw>` | None | Restrict AI lint to nodes matching `<kw>` (case-insensitive substring match on function/method name or node ID) |
+| `--max-lint-nodes <N>` | `15` | Max executable nodes inspected per run |
+| `--show-all-decisions` | `false` | Show `🟢 PASS` scores alongside `WARN` / `BLOCK` |
+| `--lint-json <path>` | None | Export full JSON report (`verdicts`, `explanation`, `service_warnings`) |
+
+---
+
+### G. Configuring Providers & Writing Custom Rules (`rules/codemap_lint_rules.json`)
+
+Rules are routed automatically by CODE-Map using **6 Domains** (`GLOBAL`, `UI`, `NETWORK`, `DISK_IO`, `CONCURRENCY`, `SECURITY`). `DomainDetectors` inspect node categories, UI/event topology (automatically excluding `#CLI` anchors from `UI`), callee labels, and source tokens so irrelevant rules are never sent.
+
+**Minimal Config & Custom Rule Schema:**
+```json
+{
+  "Mode": "WarningOnly",
+  "Gatekeeper": {
+    "Enabled": true,
+    "Provider": "GeminiDecision",
+    "Endpoint": "https://generativelanguage.googleapis.com/v1beta/decisions",
+    "Model": "gemini-decision-1",
+    "ApiKeyEnv": "$GOOGLE_API_KEY",
+    "TimeoutSeconds": 15,
+    "DefaultWarnThreshold": 0.65,
+    "DefaultBlockThreshold": 0.85
+  },
+  "Explainer": {
+    "Enabled": true,
+    "TriggerOn": "WarnOrBlock",
+    "Provider": "GeminiHttp",
+    "EndpointOrCommand": "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+    "Model": "gemini-3.1-flash-lite",
+    "ApiKeyEnv": "$GOOGLE_API_KEY",
+    "TimeoutSeconds": 45,
+    "Temperature": 0.0
+  },
+  "Rules": [
+    {
+      "Id": "CUSTOM-ERR-01",
+      "Enabled": true,
+      "Domain": "GLOBAL",
+      "Severity": "BLOCK",
+      "Title": "Do not swallow exceptions with dummy assignments",
+      "Scope": { "Languages": ["python", "csharp"], "NodeCategories": ["FUNCTION_DEF"] },
+      "AstPreFilter": { "ContainsAny": ["except", "catch"], "MinLines": 3 },
+      "Decision": {
+        "Type": "noul",
+        "Instructions": "Does this function silently swallow exceptions or use dummy assignments to bypass linters?"
+      },
+      "Thresholds": { "Warn": 0.65, "Block": 0.85 }
+    }
+  ]
+}
+```
+- **Domain Routing Tip**: Default custom rules to `"Domain": "GLOBAL"` so they run on all nodes. Only use `"UI"`, `"NETWORK"`, `"DISK_IO"`, `"CONCURRENCY"`, or `"SECURITY"` when the rule specifically targets calls matched by `DomainDetectors` (otherwise nodes without matching tokens/topology will skip the rule).
+- **Decision `Type` options**: `"noul"` (Yes/No probability `0.0–1.0`), `"score"` (rubric `Levels`), or `"choice"` (`Criteria` is a flat key-to-description dict):
+  ```json
+  "Decision": {
+    "Type": "choice",
+    "Instructions": "Classify implementation integrity.",
+    "Criteria": {
+      "real_impl": "Genuine complete implementation.",
+      "stub_or_mock": "Hardcoded mock return or TODO placeholder."
+    }
+  },
+  "Thresholds": { "WarnChoices": [], "BlockChoices": ["stub_or_mock"], "MinChoiceConfidence": 0.78 }
+  ```
+- **Custom REST APIs (`HttpTemplate`)**: Set `Gatekeeper.Provider` to `"HttpTemplate"` with `Endpoint`, `Headers`, `PayloadTemplate` (`{input}`, `{questions}`, `{model}`), and `ResponseMapping` (`answers_path`, `score_field`, `choice_field`).
+- **Local `Ollama` / `OpenAiCompatible`**: Set `Explainer.Provider` to `"Ollama"` (default `http://localhost:11434/api/chat`) or `"OpenAiCompatible"` with custom `EndpointOrCommand` and `Model`.
 
 ---
 
@@ -146,4 +240,8 @@ print(diff_res.to_diff_markdown())
 When using **CODE-Map** in the **Architect + Flash Subagent** pair workflow:
 1. **Locate & Spec First**: Use `--locate` or `WorkspaceGraphBuilder` to inspect the existing call topology and author a clear Target Spec (including pre/post-conditions and branch-to-edge mappings).
 2. **Surgical Patching**: Instruct the Subagent to patch only the target `FUNCTION_DEF` / `MODULE_STATE` nodes via `edit_file` without rewriting the entire file.
-3. **Deterministic Binary Gate**: Immediately after edits, run `codemap.py --check`, `--verify-spec`, or `--diff-files` alongside unit tests (`pytest`). Treat the formal verdict (`PASSED` / `FAILED`) as the sole stopping criterion to prevent agent thrashing.
+3. **Deterministic + Semantic Verification Gate**: Immediately after edits, run `codemap.py` with **both** deterministic checks and `--ai-lint --strict` (preferring `--git-diff HEAD~1` or `--lint-symbol` to focus on modified nodes and avoid the 15-node cap), alongside unit tests:
+   - **Mandatory Strict Mode**: Always pass `--strict` when gating with `--ai-lint`; without `--strict`, `🔴 BLOCK` violations still exit `0`.
+   - **Anti-False-Clearance Check**: Inspect `stdout` for `⚠️ [AI-LINT-SERVICE-WARN]` (or `service_warnings` in `--lint-json`). A clean exit caused by Fail-Open service degradation is **`UNVERIFIED`**, NOT a semantic pass—either supply `$GOOGLE_API_KEY` / switch to `--gatekeeper Disabled --explainer AgyCli` or explicitly flag the unverified state.
+   - **Dual-Verdict Reconciliation**: Accept changes only when **all three** hold: (a) deterministic `check_invariants() == READY_TO_SHIP`, (b) `🔴 BLOCK == 0`, and (c) zero `[AI-LINT-SERVICE-WARN]` errors.
+   - **Surgical Feedback Loop**: On `🔴 BLOCK`, use `--lint-json` (or `Explainer LLM` `問題行號` + `修正建議`) to send exact line-level fixes back to the Maker rather than rewriting the whole file.
