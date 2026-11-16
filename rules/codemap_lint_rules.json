@@ -1,0 +1,243 @@
+{
+  "Version": "1.0",
+  "Mode": "WarningOnly",
+  "Gatekeeper": {
+    "Enabled": true,
+    "Provider": "GeminiDecision",
+    "Endpoint": "https://generativelanguage.googleapis.com/v1beta/decisions",
+    "Model": "gemini-decision-1",
+    "ApiKeyEnv": "$GOOGLE_API_KEY",
+    "TimeoutSeconds": 15,
+    "DefaultWarnThreshold": 0.65,
+    "DefaultBlockThreshold": 0.85
+  },
+  "Explainer": {
+    "Enabled": true,
+    "TriggerOn": "WarnOrBlock",
+    "Provider": "GeminiHttp",
+    "EndpointOrCommand": "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+    "Model": "gemini-3.1-flash-lite",
+    "ApiKeyEnv": "$GOOGLE_API_KEY",
+    "CliArgsTemplate": "",
+    "TimeoutSeconds": 45,
+    "Temperature": 0.0
+  },
+  "DomainDetectors": {
+    "UI": [
+      "RelayCommand",
+      "StyledProperty",
+      "DirectProperty",
+      "AddHandler",
+      "onClick",
+      "addEventListener",
+      "MessageBox",
+      "Dispatcher",
+      "setState",
+      "useEffect",
+      "window.confirm",
+      "window.alert"
+    ],
+    "NETWORK": [
+      "http://",
+      "https://",
+      "fetch(",
+      "requests.",
+      "urllib",
+      "httpx",
+      "aiohttp",
+      "HttpClient",
+      "WebRequest",
+      "socket",
+      "WebSocket",
+      "grpc",
+      "RestClient"
+    ],
+    "DISK_IO": [
+      "open(",
+      "read_text",
+      "write_text",
+      "File.",
+      "Directory.",
+      "StreamWriter",
+      "StreamReader",
+      "FileStream",
+      "fs.",
+      "os.write",
+      "sqlite",
+      "Path("
+    ],
+    "CONCURRENCY": [
+      "async ",
+      "await ",
+      "Task.Run",
+      "Thread(",
+      "threading.",
+      "Lock(",
+      "Mutex",
+      "Semaphore",
+      "tokio::",
+      "go func",
+      "asyncio."
+    ],
+    "SECURITY": [
+      "eval(",
+      "exec(",
+      "shell=True",
+      "subprocess.",
+      "Process.Start",
+      "os.system(",
+      "SELECT ",
+      "INSERT ",
+      "UPDATE ",
+      "DELETE ",
+      "api_key",
+      "password",
+      "secret"
+    ]
+  },
+  "Rules": [
+    {
+      "Id": "GLOBAL-SWALLOW-01",
+      "Enabled": true,
+      "Domain": "GLOBAL",
+      "Severity": "BLOCK",
+      "Title": "禁止靜默吞掉異常或以虛擬變數/註解規避檢查",
+      "AstPreFilter": {
+        "ContainsAny": [
+          "except",
+          "catch",
+          "_ =",
+          "noqa",
+          "type: ignore",
+          "SuppressWarnings",
+          "unwrap_or_default"
+        ]
+      },
+      "Decision": {
+        "Type": "noul",
+        "Instructions": "Does this code silently swallow exceptions (e.g., empty catch/except block, bare `pass`, returning fake success), or use dummy assignments/suppression comments (like `_ = e`, `# noqa`) purely to bypass linting without genuine error handling? Ignore intentional, documented fallback logic or explicit cancellation handling."
+      },
+      "Thresholds": {
+        "Warn": 0.65,
+        "Block": 0.85
+      }
+    },
+    {
+      "Id": "GLOBAL-STUB-01",
+      "Enabled": true,
+      "Domain": "GLOBAL",
+      "Severity": "BLOCK",
+      "Title": "實作完整性與表裡一致性檢查 (抓假實作/空殼)",
+      "AstPreFilter": {
+        "MinLines": 3
+      },
+      "Decision": {
+        "Type": "choice",
+        "Instructions": "Classify the implementation integrity of this function or component relative to its name, signature, and comments.",
+        "Criteria": {
+          "real_impl": "Genuine, complete implementation matching its name and contract (including short helper/adapter/property methods).",
+          "stub_or_mock": "Fake placeholder, TODO/NotImplemented, hardcoded dummy return pretending to execute real work.",
+          "misleading": "Implementation performs destructive or contradictory behavior relative to its name or docstring."
+        }
+      },
+      "Thresholds": {
+        "WarnChoices": [],
+        "BlockChoices": [
+          "stub_or_mock",
+          "misleading"
+        ],
+        "MinChoiceConfidence": 0.78
+      }
+    },
+    {
+      "Id": "NET-TIMEOUT-01",
+      "Enabled": true,
+      "Domain": "NETWORK",
+      "Severity": "WARN",
+      "Title": "網路請求須妥善處理逾時、取消或非成功狀態碼",
+      "AstPreFilter": {
+        "MinLines": 4
+      },
+      "Decision": {
+        "Type": "noul",
+        "Instructions": "Does this function initiate an external network/HTTP/socket request without any timeout/cancellation mechanism AND without checking or propagating failure responses/exceptions? Ignore helper wrappers that accept timeout/client configuration as parameters or delegate timeout to an injected client."
+      },
+      "Thresholds": {
+        "Warn": 0.65,
+        "Block": 0.88
+      }
+    },
+    {
+      "Id": "IO-RESOURCE-01",
+      "Enabled": true,
+      "Domain": "DISK_IO",
+      "Severity": "WARN",
+      "Title": "檔案/串流 I/O 須確保資源釋放與文字編碼安全",
+      "AstPreFilter": {
+        "MinLines": 3
+      },
+      "Decision": {
+        "Type": "noul",
+        "Instructions": "Does this function open a file, stream, or database handle without deterministic cleanup (`with`, `using`, `try/finally`, `defer`), OR read/write text files relying on platform default encoding instead of explicit UTF-8 where cross-platform portability matters? Ignore binary mode (`rb`/`wb`) and factory functions intentionally returning an open stream."
+      },
+      "Thresholds": {
+        "Warn": 0.68,
+        "Block": 0.88
+      }
+    },
+    {
+      "Id": "CONC-HAZARD-01",
+      "Enabled": true,
+      "Domain": "CONCURRENCY",
+      "Severity": "WARN",
+      "Title": "非同步與併發路徑防呆 (阻塞或遺失例外)",
+      "AstPreFilter": {
+        "MinLines": 4
+      },
+      "Decision": {
+        "Type": "noul",
+        "Instructions": "Does this concurrent/async function introduce a clear concurrency bug such as synchronous blocking (`time.sleep`, `Thread.Sleep`, `.Result`, `.Wait()`) inside an async flow, fire-and-forget background task that drops unhandled exceptions, or mutating shared state across threads without synchronization?"
+      },
+      "Thresholds": {
+        "Warn": 0.68,
+        "Block": 0.88
+      }
+    },
+    {
+      "Id": "UI-THREAD-01",
+      "Enabled": true,
+      "Domain": "UI",
+      "Severity": "BLOCK",
+      "Title": "UI 事件處理器不可同步阻塞主執行緒",
+      "AstPreFilter": {
+        "MinLines": 4
+      },
+      "Decision": {
+        "Type": "noul",
+        "Instructions": "Does this UI event handler or command synchronously block the UI thread with heavy disk I/O, network calls, `time.sleep`/`Thread.Sleep`, or `.Result`/`.Wait()` instead of using async/await or background dispatch?"
+      },
+      "Thresholds": {
+        "Warn": 0.65,
+        "Block": 0.85
+      }
+    },
+    {
+      "Id": "SEC-INJECT-01",
+      "Enabled": true,
+      "Domain": "SECURITY",
+      "Severity": "BLOCK",
+      "Title": "禁止命令注入、動態執行未驗證輸入或硬編碼密鑰",
+      "AstPreFilter": {
+        "MinLines": 2
+      },
+      "Decision": {
+        "Type": "noul",
+        "Instructions": "Does this code contain an actual security vulnerability such as command injection (`shell=True` with dynamic input), `eval`/`exec` on untrusted strings, SQL string interpolation with variables, or hardcoded production API keys/passwords? Ignore test fixtures, placeholder strings, or parameterized queries."
+      },
+      "Thresholds": {
+        "Warn": 0.70,
+        "Block": 0.88
+      }
+    }
+  ]
+}

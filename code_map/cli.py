@@ -36,6 +36,19 @@ def main():
     parser.add_argument("--git-diff", nargs="?", const="HEAD~1", help="比對指定檔案在 Git 歷史中的 UIA 語意差分 (預設 HEAD~1)")
     parser.add_argument("--repo", default=".", help="Git 倉庫目錄路徑 (配合 --git-diff 使用)")
 
+    # AI Decision + LLM 混合語意審查參數 (Fail-Open)
+    parser.add_argument("--ai-lint", action="store_true", help="啟用 Decision API + LLM 雙層語意審查 (預設僅輸出警告，不阻斷主流程)")
+    parser.add_argument("--rules", help="指定外部 Lint 規則與 LLM 設定檔 (預設 rules/codemap_lint_rules.json)")
+    parser.add_argument("--gatekeeper", help="覆蓋 Gatekeeper Provider (GeminiDecision/OpenAiCompatible/HttpTemplate/Disabled)")
+    parser.add_argument("--explainer", help="覆蓋 Explainer Provider (GeminiHttp/AgyCli/ClaudeCli/CodexCli/Ollama/OpenAiCompatible/CustomCli/Disabled)")
+    parser.add_argument("--lint-model", help="覆蓋 Explainer LLM 模型名稱")
+    parser.add_argument("--api-key", help="覆蓋 API 金鑰 (建議改用環境變數，例如 GOOGLE_API_KEY)")
+    parser.add_argument("--lint-json", help="將完整 AI Lint 判決與回覆訊息導出為 JSON 檔案")
+    parser.add_argument("--strict", action="store_true", help="嚴格模式：僅當實際檢出 BLOCK 級違規時返回非 0 狀態碼 (服務異常仍不阻斷)")
+    parser.add_argument("--show-all-decisions", action="store_true", help="顯示包含 PASS 在內的所有 Decision API 評分明細")
+    parser.add_argument("--max-lint-nodes", type=int, default=15, help="單次 AI Lint 最多審查的可執行節點數 (預設 15)")
+    parser.add_argument("--lint-symbol", help="僅對名稱或 ID 符合關鍵字的節點執行 AI Lint")
+
     args = parser.parse_args()
 
     if args.list_languages:
@@ -172,7 +185,39 @@ def main():
             out_path = reporter.generate(graph, args.html, file_path=args.file)
             print(f"\n🌲 [HTML 雙欄因果儀表板已輸出至]: {out_path}")
 
-        if args.check and not inv["passed"]:
+        ai_lint_blocked = False
+        if args.ai_lint:
+            from code_map.core.semantic_linter import SemanticLinter
+            try:
+                linter = SemanticLinter.from_file(
+                    rules_path=args.rules,
+                    gatekeeper_override=args.gatekeeper,
+                    explainer_override=args.explainer,
+                    explainer_model_override=args.lint_model,
+                    api_key_override=args.api_key,
+                )
+                target_nodes = None
+                if args.lint_symbol:
+                    kw = args.lint_symbol.lower()
+                    target_nodes = [
+                        n for n, d in graph.g.nodes(data=True)
+                        if kw in str(d.get("label", "")).lower() or kw in n.lower()
+                    ]
+                lint_report = linter.lint_graph(
+                    graph,
+                    target_node_ids=target_nodes,
+                    max_nodes=args.max_lint_nodes,
+                )
+                print("\n" + lint_report.to_markdown(show_all_decisions=args.show_all_decisions))
+                if args.lint_json:
+                    with open(args.lint_json, "w", encoding="utf-8") as f:
+                        json.dump(lint_report.to_dict(), f, ensure_ascii=False, indent=2)
+                    print(f"\n📦 AI Lint 完整報告已導出至: {args.lint_json}")
+                ai_lint_blocked = args.strict and lint_report.has_blocks
+            except Exception as exc:
+                print(f"\n⚠️ [AI-LINT-SERVICE-WARN] AI Lint 啟動失敗 ({exc})，已安全略過，不阻斷 CODE-Map。")
+
+        if (args.check and not inv["passed"]) or ai_lint_blocked:
             sys.exit(1)
     else:
         print("CODE-Map 行為語意圖譜引擎已就緒！請使用 --file <檔案>、--files <A> <B>、--verify-spec <契約> 或 --diff-files <A> <B>。")
